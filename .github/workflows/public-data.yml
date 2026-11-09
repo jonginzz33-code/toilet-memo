@@ -1,0 +1,30 @@
+name: Public toilet data
+
+# 공중화장실 데이터를 매달 받아서 'public-data' 릴리스에 올림 (앱이 여기서 내려받음)
+on:
+  schedule:
+    - cron: '17 18 1 * *'
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - scripts/public_toilets.py
+      - .github/workflows/public-data.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch
+        run: python3 scripts/public_toilets.py public-toilets.json.gz
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view public-data >/dev/null 2>&1 || \
+            gh release create public-data --title "공중화장실 데이터" --notes "앱이 자동으로 내려받는 파일이에요" --prerelease --latest=false
+          gh release upload public-data public-toilets.json.gz --clobber
