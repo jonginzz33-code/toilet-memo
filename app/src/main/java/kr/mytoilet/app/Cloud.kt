@@ -120,8 +120,13 @@ object Cloud {
     @Suppress("UNCHECKED_CAST")
     suspend fun publicCell(cell: String): List<PublicToilet> {
         cellCache[cell]?.let { return it }
-        val doc = db.collection("publicCells").document(cell).get().await()
-        val items = (doc.get("items") as? List<Map<String, Any?>>)?.map { PublicToilet.fromMap(it) } ?: emptyList()
+        // 먼저 GitHub에서 받아 둔 파일, 안 되면 서버(관리자가 올린 데이터)
+        val items = try {
+            PublicData.cell(cell)
+        } catch (e: Exception) {
+            val doc = db.collection("publicCells").document(cell).get().await()
+            (doc.get("items") as? List<Map<String, Any?>>)?.map { PublicToilet.fromMap(it) } ?: emptyList()
+        }
         cellCache[cell] = items
         return items
     }
