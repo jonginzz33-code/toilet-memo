@@ -240,7 +240,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startMap() {
         if (BuildConfig.KAKAO_KEY.isBlank()) {
-            showMapError("카카오 지도 키가 비어 있어요 (GitHub 비밀값 KAKAO_KEY 확인)")
+            showMapError("카카오 지도 키가 비어 있어요 (gradle.properties의 kakaoKey 확인)")
             return
         }
         mapView.start(object : MapLifeCycleCallback() {

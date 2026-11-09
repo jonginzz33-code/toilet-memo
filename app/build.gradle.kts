@@ -23,7 +23,10 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = readmeVersion
-        buildConfigField("String", "KAKAO_KEY", "\"${System.getenv("KAKAO_KEY") ?: ""}\"")
+        // 키는 gradle.properties의 kakaoKey가 있으면 그걸 쓰고, 없으면 GitHub 비밀값 KAKAO_KEY를 써요
+        val kakaoKey = (project.findProperty("kakaoKey") as String?)?.trim().orEmpty()
+            .ifBlank { System.getenv("KAKAO_KEY")?.trim().orEmpty() }
+        buildConfigField("String", "KAKAO_KEY", "\"$kakaoKey\"")
         buildConfigField("String", "GITHUB_REPO", "\"jonginzz33-code/toilet-memo\"")
     }
 
