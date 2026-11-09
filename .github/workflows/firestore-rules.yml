@@ -1,6 +1,6 @@
 name: Deploy Firestore rules
 
-# firestore.rules 가 바뀌면 Firebase 서버 권한 규칙에 자동으로 반영
+# firestore.rules 가 바뀌면 Firebase 서버 권한 규칙에 자동으로 반영 (비밀값 FIREBASE_SA)
 on:
   push:
     branches: [ main ]

@@ -3,6 +3,15 @@ name: Build APK
 on:
   push:
     branches: [ main ]
+    # 앱과 상관없는 파일만 바뀌면 빌드 안 함
+    paths-ignore:
+      - firestore.rules
+      - firebase.json
+      - docs/**
+      - scripts/**
+      - CLAUDE.md
+      - .github/workflows/firestore-rules.yml
+      - .github/workflows/public-data.yml
   workflow_dispatch:
 
 permissions:
