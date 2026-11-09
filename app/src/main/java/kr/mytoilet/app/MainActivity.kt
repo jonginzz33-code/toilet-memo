@@ -231,11 +231,22 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- 지도 ----------------
 
+    private fun showMapError(msg: String) {
+        hint.text = msg
+        hint.setTextColor(C.RED_TEXT)
+        hint.background = round(C.RED_BG, 14f)
+        toast(msg)
+    }
+
     private fun startMap() {
+        if (BuildConfig.KAKAO_KEY.isBlank()) {
+            showMapError("카카오 지도 키가 비어 있어요 (GitHub 비밀값 KAKAO_KEY 확인)")
+            return
+        }
         mapView.start(object : MapLifeCycleCallback() {
             override fun onMapDestroy() {}
             override fun onMapError(error: Exception) {
-                toast("지도를 열지 못했어요: ${error.message}")
+                showMapError("지도를 열지 못했어요\n${error.message ?: error.javaClass.simpleName}")
             }
         }, object : KakaoMapReadyCallback() {
             override fun onMapReady(kakaoMap: KakaoMap) {
