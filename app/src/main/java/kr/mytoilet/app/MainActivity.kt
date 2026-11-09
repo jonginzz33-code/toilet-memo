@@ -193,6 +193,8 @@ class MainActivity : AppCompatActivity() {
             elevation = dpf(3f)
             setOnClickListener { onClick() }
         }
+        rightCol.addView(rbtn("🔍") { searchPlace() }, LinearLayout.LayoutParams(dp(46), dp(46)))
+        rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
         rightCol.addView(rbtn("＋") { zoom(true) }, LinearLayout.LayoutParams(dp(46), dp(46)))
         rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
         rightCol.addView(rbtn("－") { zoom(false) }, LinearLayout.LayoutParams(dp(46), dp(46)))
@@ -219,6 +221,7 @@ class MainActivity : AppCompatActivity() {
         }
         bottom.addView(hint, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
         placeBar = hbox(8).apply { visibility = View.GONE }
+        placeBar.add(btn("🔍 검색", C.GLASS) { searchPlace() }, 1f)
         placeBar.add(btn("취소", C.GLASS) { exitPlacing() }, 1f)
         placeBar.add(btn("이 위치로 정하기", C.RED, Color.WHITE) { confirmPlace() }, 2f)
         bottom.add(placeBar)
@@ -524,6 +527,72 @@ class MainActivity : AppCompatActivity() {
         followBtn.setTextColor(if (on) Color.WHITE else C.TEXT)
         if (on) { goToMe(); hint.text = "내 위치를 따라가는 중 · 지도를 밀면 꺼져요" }
         else if (!placing) hint.text = "두 손가락으로 확대·축소"
+    }
+
+    // ---------------- 장소 검색 ----------------
+
+    /** 주소·장소 이름으로 찾아서 지도를 그 자리로 옮김 (폰 내장 검색, 키 필요 없음) */
+    fun searchPlace() {
+        val input = android.widget.EditText(this).apply {
+            hint = "예: 의왕시청, 호계동 123, 강남역"
+            setSingleLine()
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+        }
+        val box = FrameLayout(this).apply { setPadding(dp(20), dp(8), dp(20), 0); addView(input) }
+        val dlg = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("위치 검색")
+            .setView(box)
+            .setPositiveButton("검색", null)
+            .setNegativeButton("닫기", null)
+            .create()
+        fun go() {
+            val q = input.text.toString().trim()
+            if (q.isEmpty()) return
+            dlg.dismiss()
+            runSearch(q)
+        }
+        input.setOnEditorActionListener { _, _, _ -> go(); true }
+        dlg.setOnShowListener {
+            dlg.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener { go() }
+            input.requestFocus()
+            dlg.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+        }
+        dlg.show()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun runSearch(q: String) {
+        lifecycleScope.launch {
+            busy(true)
+            val found = try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    // 한국 안에서만 찾기
+                    android.location.Geocoder(this@MainActivity, java.util.Locale.KOREA)
+                        .getFromLocationName(q, 8, 33.0, 124.5, 38.7, 131.9) ?: emptyList()
+                }
+            } catch (e: Exception) {
+                toast("검색하지 못했어요: ${e.message ?: "인터넷 연결 확인"}")
+                null
+            } finally {
+                busy(false)
+            }
+            if (found == null) return@launch
+            if (found.isEmpty()) { toast("'$q' 를 찾지 못했어요. 주소나 다른 이름으로 해 보세요"); return@launch }
+            val go = { a: android.location.Address ->
+                setFollow(false)
+                move(a.latitude, a.longitude, 17)
+            }
+            if (found.size == 1) { go(found[0]); return@launch }
+            val names = found.map { a ->
+                (a.featureName?.takeIf { it != a.getAddressLine(0) && !it.all(Char::isDigit) }?.let { "$it\n" } ?: "") +
+                    (a.getAddressLine(0) ?: "${a.latitude}, ${a.longitude}")
+            }.toTypedArray()
+            androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                .setTitle("'$q' 검색 결과")
+                .setItems(names) { _, i -> go(found[i]) }
+                .setNegativeButton("닫기", null)
+                .show()
+        }
     }
 
     // ---------------- 화장실 추가 · 위치 옮기기 ----------------
