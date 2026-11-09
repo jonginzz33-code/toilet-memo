@@ -10,6 +10,7 @@ on:
       - docs/mockups/**
       - scripts/**
       - CLAUDE.md
+      - NEXT.md
       - .github/workflows/firestore-rules.yml
       - .github/workflows/public-data.yml
   workflow_dispatch:
@@ -19,6 +20,8 @@ permissions:
 
 jobs:
   build:
+    # 사용자가 "만들어줘" 할 때만 빌드: 커밋 메시지에 [build] 가 있거나 직접 실행할 때
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
