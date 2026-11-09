@@ -160,8 +160,16 @@ object Cloud {
     }
 
     suspend fun reopen(toiletId: String) {
-        db.collection("status").document(toiletId).set(mapOf("reopenAt" to System.currentTimeMillis(), "by" to (uid ?: ""))).await()
+        db.collection("status").document(toiletId).set(mapOf("reopenAt" to System.currentTimeMillis(), "by" to (uid ?: "")), SetOptions.merge()).await()
     }
+
+    /** 공중화장실 '다녀왔어요': 최근 방문 날짜를 모두에게 보여 줌 */
+    suspend fun visit(toiletId: String) {
+        db.collection("status").document(toiletId).set(mapOf("visitAt" to System.currentTimeMillis(), "visitBy" to (uid ?: "")), SetOptions.merge()).await()
+    }
+
+    suspend fun lastVisit(toiletId: String): Long =
+        try { db.collection("status").document(toiletId).get().await().getLong("visitAt") ?: 0L } catch (_: Exception) { 0L }
 
     // 상태 투표 (최근 60일)
     data class Votes(val clean: Int, val normal: Int, val bad: Int, val tags: Map<String, Int>, val mine: Int?) {

@@ -32,10 +32,21 @@ object Sheets {
         if (d.isNotEmpty()) top.add(a.text(d, 13f, C.TEXT2))
         s.add(top)
         // 최근에 언제 갔는지(수정했는지) 맨 위에 크게
-        s.add(a.text("🕒 최근 수정 ${Geo.agoShort(t.updated)} · ${Geo.date(t.updated)}", 15f, C.BLUE_TEXT, 700).apply {
+        val dateRow = a.hbox(8)
+        dateRow.add(a.text("🕒 최근 수정 ${Geo.agoShort(t.updated)} · ${Geo.date(t.updated)}", 14f, C.BLUE_TEXT, 700).apply {
             background = a.round(C.BLUE_BG, 12f)
             setPadding(a.dp(12), a.dp(8), a.dp(12), a.dp(8))
+        }, 1f)
+        // 다녀왔어요: 다른 건 그대로, 날짜만 오늘로 (서버에 올라가서 그룹 사람들도 봄)
+        dateRow.add(a.btn("다녀왔어요", C.GREEN, Color.WHITE) {
+            a.lifecycleScope.launch {
+                a.saveToilet(t.copy(), t.scope, t.groupId, touch = true)
+                a.toast("오늘 다녀온 걸로 기록했어요")
+                s.dismiss()
+                (a.mine + a.groupToilets).firstOrNull { it.id == t.id }?.let { toiletDetail(a, it) }
+            }
         })
+        s.add(dateRow)
         s.add(a.text(if (t.place.isBlank()) "위치 설명 없음" else t.place, 15f, C.TEXT2))
 
         val pwRow = a.hbox(10).apply {
@@ -284,6 +295,25 @@ object Sheets {
         val info = listOf(distText(a, p.lat, p.lon), p.open.let { if (it.isBlank()) "" else "개방 $it" }).filter { it.isNotBlank() }
         s.add(a.text(info.joinToString(" · ").ifBlank { "공중화장실" }, 14f, C.TEXT2))
         if (p.addr.isNotBlank()) s.add(a.text(p.addr, 13f, C.TEXT3))
+        val visitRow = a.hbox(8)
+        val visitText = a.text("🕒 최근 다녀옴: 확인 중…", 14f, C.BLUE_TEXT, 700).apply {
+            background = a.round(C.BLUE_BG, 12f)
+            setPadding(a.dp(12), a.dp(8), a.dp(12), a.dp(8))
+        }
+        fun showVisit(at: Long) {
+            visitText.text = if (at <= 0) "🕒 최근 다녀옴: 기록 없음" else "🕒 최근 다녀옴: ${Geo.agoShort(at)} · ${Geo.date(at)}"
+        }
+        visitRow.add(visitText, 1f)
+        visitRow.add(a.btn("다녀왔어요", C.GREEN, Color.WHITE) {
+            Login.need(a, "다녀왔다고 알리려면") {
+                a.lifecycleScope.launch {
+                    try { Cloud.visit(p.id); showVisit(System.currentTimeMillis()); a.toast("고마워요! 다른 사람들도 볼 수 있어요") }
+                    catch (e: Exception) { a.toast("실패: ${e.message}") }
+                }
+            }
+        })
+        s.add(visitRow)
+        a.lifecycleScope.launch { showVisit(Cloud.lastVisit(p.id)) }
         if (p.flags.isNotEmpty()) {
             val fr = a.hbox(6)
             p.flags.forEach { fr.add(a.chip(it, C.GRAY_BG, C.TEXT2)) }

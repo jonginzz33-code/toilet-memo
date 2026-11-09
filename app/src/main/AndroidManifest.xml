@@ -23,5 +23,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 홈 화면 위젯: 가장 가까운 화장실 -->
+        <receiver
+            android:name=".NearestWidget"
+            android:exported="false"
+            android:label="가까운 화장실">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_nearest_info" />
+        </receiver>
     </application>
 </manifest>

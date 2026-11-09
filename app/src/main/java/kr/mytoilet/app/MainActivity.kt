@@ -58,6 +58,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var addBtn: TextView
     private lateinit var placeBar: LinearLayout
     private lateinit var routeBar: LinearLayout
+    private lateinit var urgentBtn: TextView
+    private var widgetAt = 0L
     private lateinit var routeInfo: TextView
     private var routeLine: com.kakao.vectormap.route.RouteLine? = null
     private var routeTarget: Triple<Double, Double, String>? = null
@@ -224,6 +226,13 @@ class MainActivity : AppCompatActivity() {
             background = glass(14f)
             setPadding(dp(12), dp(7), dp(12), dp(7))
         }
+        urgentBtn = text("🚨 급해요", 17f, Color.WHITE, 800, Gravity.CENTER).apply {
+            background = round(C.RED, 28f)
+            elevation = dpf(4f)
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+            setOnClickListener { urgent() }
+        }
+        bottom.addView(urgentBtn, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.START })
         bottom.addView(hint, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
         placeBar = hbox(8).apply { visibility = View.GONE }
         placeBar.add(btn("🔍 검색", C.GLASS) { searchPlace() }, 1f)
@@ -477,6 +486,7 @@ class MainActivity : AppCompatActivity() {
             val l = r.lastLocation ?: return
             val first = myLat == null
             myLat = l.latitude; myLon = l.longitude
+            if (first || System.currentTimeMillis() - widgetAt > 60_000) { widgetAt = System.currentTimeMillis(); updateWidget() }
             try { updateMe() } catch (e: Exception) {
                 showMapError("내 위치 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
             }
@@ -553,6 +563,40 @@ class MainActivity : AppCompatActivity() {
         else if (!placing) hint.text = "두 손가락으로 확대·축소"
     }
 
+    // ---------------- 급해요 ----------------
+
+    /** 가장 가까운 화장실(내 것 + 그룹 + 공중, 2km 안)로 바로 도보 길찾기 */
+    private fun urgent() {
+        val lat = myLat
+        val lon = myLon
+        if (lat == null || lon == null) { goToMe(); return }
+        lifecycleScope.launch {
+            busy(true)
+            val pubs = ArrayList<PublicToilet>()
+            if (prefs.showPublic) try {
+                for (c in Geo.cellsAround(lat, lon, 2000.0)) pubs.addAll(Cloud.publicCell(c))
+            } catch (_: Exception) {}
+            busy(false)
+            val cands = (mine + groupToilets).map { Triple(it.lat, it.lon, it.title()) } +
+                pubs.filter { (unavail[it.id]?.count ?: 0) == 0 }.map { Triple(it.lat, it.lon, it.name) }
+            val best = cands.minByOrNull { Geo.dist(lat, lon, it.first, it.second) }
+            if (best == null || Geo.dist(lat, lon, best.first, best.second) > 2000) {
+                toast("2km 안에 화장실을 찾지 못했어요"); return@launch
+            }
+            showRoute(best.first, best.second, best.third, car = false)
+        }
+    }
+
+    // ---------------- 위젯 ----------------
+
+    /** 홈 화면 위젯에 가장 가까운 내 화장실(비밀번호 있는 것 우선) 저장 */
+    fun updateWidget() {
+        val lat = myLat ?: return
+        val lon = myLon ?: return
+        val t = (mine + groupToilets).minByOrNull { Geo.dist(lat, lon, it.lat, it.lon) }
+        NearestWidget.save(this, t, t?.let { Geo.dist(lat, lon, it.lat, it.lon) })
+    }
+
     // ---------------- 길 보기 ----------------
 
     /** 내 위치 → 화장실까지 길을 지도에 선으로 (도보: 파란 선, 차량: 검은 선, 길을 못 찾으면 회색 곧은 선) */
@@ -591,6 +635,7 @@ class MainActivity : AppCompatActivity() {
             routeKakaoBtn.background = round(if (car) C.CAR else C.BLUE, 14f)
             routeBar.visibility = View.VISIBLE
             addBtn.visibility = View.GONE
+            urgentBtn.visibility = View.GONE
         }
     }
 
@@ -599,7 +644,7 @@ class MainActivity : AppCompatActivity() {
         routeLine = null
         routeTarget = null
         if (::routeBar.isInitialized) routeBar.visibility = View.GONE
-        if (!placing) addBtn.visibility = View.VISIBLE
+        if (!placing) { addBtn.visibility = View.VISIBLE; urgentBtn.visibility = View.VISIBLE }
     }
 
     // ---------------- 장소 검색 ----------------
@@ -691,6 +736,7 @@ class MainActivity : AppCompatActivity() {
         centerPin.visibility = View.VISIBLE
         placeBar.visibility = View.VISIBLE
         addBtn.visibility = View.GONE
+        urgentBtn.visibility = View.GONE
         rightCol.visibility = View.GONE
         hint.text = "지도를 움직여 빨간 표시를 화장실 자리에 맞추세요"
     }
@@ -701,6 +747,7 @@ class MainActivity : AppCompatActivity() {
         centerPin.visibility = View.GONE
         placeBar.visibility = View.GONE
         addBtn.visibility = View.VISIBLE
+        urgentBtn.visibility = View.VISIBLE
         rightCol.visibility = View.VISIBLE
         hint.text = "두 손가락으로 확대·축소"
     }
@@ -744,6 +791,7 @@ class MainActivity : AppCompatActivity() {
             busy(false)
         }
         drawToilets()
+        updateWidget()
     }
 
     /** 저장 (범위가 바뀌면 예전 자리에서 지움) */
