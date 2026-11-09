@@ -132,7 +132,11 @@ class MainActivity : AppCompatActivity() {
         )
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (placing) exitPlacing() else { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
+                when {
+                    placing -> exitPlacing()
+                    routeTarget != null -> clearRoute()
+                    else -> confirm("앱을 종료할까요?", "나만의 화장실을 닫아요.", "종료") { finish() }
+                }
             }
         })
         lifecycleScope.launch {
