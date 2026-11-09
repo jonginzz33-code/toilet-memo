@@ -173,7 +173,7 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { Sheets.menu(this@MainActivity) }
         })
         topBox.add(bar)
-        addBtn = primaryBtn("＋ 지금 위치에 화장실 추가") { addAtMyLocation() }.apply { elevation = dpf(3f) }
+        addBtn = primaryBtn("＋ 화장실 추가") { addAtMapCenter() }.apply { elevation = dpf(3f) }
         topBox.add(addBtn)
         root.addView(topBox, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
 
@@ -597,7 +597,13 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- 화장실 추가 · 위치 옮기기 ----------------
 
-    private fun addAtMyLocation() {
+    /** 지금 보고 있는 지도 자리에서 시작 (검색해서 옮긴 곳 그대로). 지도가 아직 없으면 내 위치 */
+    private fun addAtMapCenter() {
+        if (map != null) {
+            val (lat, lon) = center()
+            startPlacing(null, lat, lon)
+            return
+        }
         val lat = myLat
         val lon = myLon
         if (lat == null || lon == null) { goToMe(); return }

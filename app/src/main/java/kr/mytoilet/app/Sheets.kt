@@ -153,25 +153,56 @@ object Sheets {
 
     // ---------------- 목록 ----------------
 
+    /** 가까운 순 목록: 내 화장실 + 그룹 화장실 + 공중화장실 (반경 2km) */
     fun list(a: MainActivity) {
-        val s = Sheet(a, "내 화장실 (가까운 순)")
-        val (clat, clon) = a.myLat?.let { it to (a.myLon ?: 0.0) } ?: a.center()
-        val all = (a.mine + a.groupToilets).map { it to Geo.dist(clat, clon, it.lat, it.lon) }.sortedBy { it.second }
-        if (all.isEmpty()) s.add(a.text("아직 저장한 화장실이 없어요.\n맨 위 '＋ 지금 위치에 화장실 추가'를 눌러 보세요.", 15f, C.TEXT2))
-        for ((t, d) in all.take(100)) {
-            val row = a.hbox(10).apply {
-                background = a.round(0xFFFFFFFF.toInt(), 14f)
-                setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10))
-            }
+        // 기준: 내 위치. 단, 검색 등으로 지도를 멀리(500m 넘게) 옮겼으면 지도 가운데
+        val (mlat, mlon) = a.center()
+        val me = a.myLat?.let { it to (a.myLon ?: 0.0) }
+        val useMe = me != null && Geo.dist(me.first, me.second, mlat, mlon) <= 500
+        val (clat, clon) = if (useMe) me!! else (mlat to mlon)
+        val s = Sheet(a, if (useMe) "가까운 화장실 (내 위치 기준)" else "가까운 화장실 (지도 가운데 기준)")
+        val box = a.vbox(8)
+        val loading = a.text("공중화장실 찾는 중…", 13f, C.TEXT3)
+        s.add(box)
+        s.add(loading)
+
+        fun row(title: String, sub: String, chip: View, onClick: () -> Unit) = a.hbox(10).apply {
+            background = a.round(0xFFFFFFFF.toInt(), 14f)
+            setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10))
             val tx = a.vbox(2)
-            tx.add(a.text(t.title(), 15f, C.TEXT, 700))
-            tx.add(a.text("${Geo.fmt(d)} · ${t.place.ifBlank { "위치 설명 없음" }}", 12f, C.TEXT2))
-            row.add(tx, 1f)
-            row.add(scopeChip(a, t))
-            row.setOnClickListener { s.dismiss(); toiletDetail(a, t) }
-            s.add(row)
+            tx.add(a.text(title, 15f, C.TEXT, 700))
+            tx.add(a.text(sub, 12f, C.TEXT2))
+            add(tx, 1f)
+            add(chip)
+            setOnClickListener { s.dismiss(); onClick() }
         }
+
+        fun fill(publics: List<PublicToilet>) {
+            box.removeAllViews()
+            val items: List<Pair<Any, Double>> =
+                ((a.mine + a.groupToilets).map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) } +
+                    publics.map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) }.filter { it.second <= 2000 })
+                    .sortedBy { it.second }
+            if (items.isEmpty()) box.add(a.text("근처에 화장실이 없어요.\n맨 위 '＋ 화장실 추가'로 저장해 보세요.", 15f, C.TEXT2))
+            for ((x, d) in items.take(80)) {
+                when (x) {
+                    is Toilet -> box.add(row(x.title(), "${Geo.fmt(d)} · ${Geo.agoShort(x.updated)} · ${x.place.ifBlank { "위치 설명 없음" }}", scopeChip(a, x)) { toiletDetail(a, x) })
+                    is PublicToilet -> box.add(row(x.name, "${Geo.fmt(d)} · ${x.addr.ifBlank { "공중화장실" }}", a.chip("공중화장실", C.GRAY_BG, C.TEXT2)) { publicDetail(a, x) })
+                }
+            }
+        }
+
+        fill(emptyList())
         s.show()
+        if (!a.prefs.showPublic) { loading.visibility = View.GONE; return }
+        a.lifecycleScope.launch {
+            val pubs = ArrayList<PublicToilet>()
+            try {
+                for (c in Geo.cellsAround(clat, clon, 2000.0)) pubs.addAll(Cloud.publicCell(c))
+            } catch (_: Exception) {}
+            loading.visibility = View.GONE
+            fill(pubs.distinctBy { it.id })
+        }
     }
 
     // ---------------- 공중화장실 상세 ----------------
