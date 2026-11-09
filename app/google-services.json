@@ -12,7 +12,20 @@
           "package_name": "kr.mytoilet.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "994060179309-uhcajlqs7lurl6gbcl2a4ed21e9l536r.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "kr.mytoilet.app",
+            "certificate_hash": "789c9b867f95e10782031f4528d356c84b6d45fe"
+          }
+        },
+        {
+          "client_id": "994060179309-ogoaghag1sm1l8q1chsmei7hnensj6r7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD71izaYU46Nms8Top3x2mruYh7nPaqMbI"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "994060179309-ogoaghag1sm1l8q1chsmei7hnensj6r7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
