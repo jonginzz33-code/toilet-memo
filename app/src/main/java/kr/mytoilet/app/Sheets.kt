@@ -31,6 +31,11 @@ object Sheets {
         val d = distText(a, t.lat, t.lon)
         if (d.isNotEmpty()) top.add(a.text(d, 13f, C.TEXT2))
         s.add(top)
+        // 최근에 언제 갔는지(수정했는지) 맨 위에 크게
+        s.add(a.text("🕒 최근 수정 ${Geo.agoShort(t.updated)} · ${Geo.date(t.updated)}", 15f, C.BLUE_TEXT, 700).apply {
+            background = a.round(C.BLUE_BG, 12f)
+            setPadding(a.dp(12), a.dp(8), a.dp(12), a.dp(8))
+        })
         s.add(a.text(if (t.place.isBlank()) "위치 설명 없음" else t.place, 15f, C.TEXT2))
 
         val pwRow = a.hbox(10).apply {
@@ -45,7 +50,6 @@ object Sheets {
         if (t.pw.isNotBlank()) pwRow.add(a.btn("복사", 0xFFFFFFFF.toInt()) { a.copy(t.pw) })
         s.add(pwRow)
         if (t.memo.isNotBlank()) s.add(a.text("📝 ${t.memo}", 14f, C.TEXT2))
-        s.add(a.text("수정 ${Geo.ago(t.updated)}", 12f, C.TEXT3))
 
         val row = a.hbox(8)
         row.add(a.btn("수정") { s.dismiss(); edit(a, t, t.lat, t.lon) }, 1f)

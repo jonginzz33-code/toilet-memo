@@ -221,6 +221,20 @@ object Geo {
         return out
     }
 
+    /** 지도·상세용 짧은 날짜: 오늘, 3일 전, 1주 전, 2달 전, 1년 전 */
+    fun agoShort(ms: Long): String {
+        val days = (System.currentTimeMillis() - ms) / 86_400_000L
+        return when {
+            days < 1 -> "오늘"
+            days < 7 -> "${days}일 전"
+            days < 30 -> "${days / 7}주 전"
+            days < 365 -> "${days / 30}달 전"
+            else -> "${days / 365}년 전"
+        }
+    }
+
+    fun date(ms: Long): String = java.text.SimpleDateFormat("yyyy.MM.dd", java.util.Locale.KOREA).format(java.util.Date(ms))
+
     fun ago(ms: Long): String {
         val m = (System.currentTimeMillis() - ms) / 60000
         return when {
