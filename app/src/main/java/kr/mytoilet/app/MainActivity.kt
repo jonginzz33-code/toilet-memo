@@ -61,6 +61,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeInfo: TextView
     private var routeLine: com.kakao.vectormap.route.RouteLine? = null
     private var routeTarget: Triple<Double, Double, String>? = null
+    private var routeCar = false
+    private lateinit var routeKakaoBtn: TextView
     private lateinit var hint: TextView
     private lateinit var followBtn: TextView
     private lateinit var loading: LinearProgressIndicator
@@ -238,13 +240,14 @@ class MainActivity : AppCompatActivity() {
         routeBar.add(routeInfo)
         val rb = hbox(8)
         rb.add(btn("✕ 길 지우기", C.GLASS) { clearRoute() }, 1f)
-        rb.add(btn("카카오맵으로 안내", C.BLUE, Color.WHITE) {
+        routeKakaoBtn = btn("카카오맵으로 안내", C.BLUE, Color.WHITE) {
             routeTarget?.let { (la, lo, n) ->
-                val app = Uri.parse("kakaomap://route?sp=${myLat},${myLon}&ep=$la,$lo&by=FOOT")
+                val app = Uri.parse("kakaomap://route?sp=${myLat},${myLon}&ep=$la,$lo&by=${if (routeCar) "CAR" else "FOOT"}")
                 try { startActivity(Intent(Intent.ACTION_VIEW, app)) }
                 catch (_: Exception) { open("https://map.kakao.com/link/to/${Uri.encode(n)},$la,$lo") }
             }
-        }, 1f)
+        }
+        rb.add(routeKakaoBtn, 1f)
         routeBar.add(rb)
         bottom.add(routeBar)
         root.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
@@ -553,27 +556,28 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- 길 보기 ----------------
 
-    /** 내 위치 → 화장실까지 걷는 길을 지도에 파란 선으로 (길을 못 찾으면 곧은 점선) */
-    fun showRoute(lat: Double, lon: Double, name: String) {
+    /** 내 위치 → 화장실까지 길을 지도에 선으로 (도보: 파란 선, 차량: 검은 선, 길을 못 찾으면 회색 곧은 선) */
+    fun showRoute(lat: Double, lon: Double, name: String, car: Boolean = false) {
         val m = map ?: return
         val sLat = myLat
         val sLon = myLon
         if (sLat == null || sLon == null) { goToMe(); return }
         clearRoute()
         routeTarget = Triple(lat, lon, name)
+        routeCar = car
         setFollow(false)
         lifecycleScope.launch {
             busy(true)
-            val r = try { Walk.route(sLat, sLon, lat, lon) } catch (_: Exception) { null } finally { busy(false) }
+            val r = try { Walk.route(sLat, sLon, lat, lon, car) } catch (_: Exception) { null } finally { busy(false) }
             val pts = r?.points ?: listOf(sLat to sLon, lat to lon)
             val dist = r?.meters ?: Geo.dist(sLat, sLon, lat, lon)
-            val min = ((r?.seconds ?: (dist / 1.2)) / 60).toInt().coerceAtLeast(1)
+            val min = ((r?.seconds ?: (dist / if (car) 8.0 else 1.2)) / 60).toInt().coerceAtLeast(1)
             try {
                 val layer = m.routeLineManager?.layer ?: return@launch
                 val styles = com.kakao.vectormap.route.RouteLineStylesSet.from(
                     "walk",
                     com.kakao.vectormap.route.RouteLineStyles.from(
-                        com.kakao.vectormap.route.RouteLineStyle.from(dpf(6f), if (r != null) C.BLUE else C.GRAY)
+                        com.kakao.vectormap.route.RouteLineStyle.from(dpf(6f), if (r == null) C.GRAY else if (car) C.CAR else C.BLUE)
                     )
                 )
                 val seg = com.kakao.vectormap.route.RouteLineSegment.from(pts.map { LatLng.from(it.first, it.second) })
@@ -584,7 +588,8 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 showMapError("길을 그리지 못했어요\n${e.message}")
             }
-            routeInfo.text = "🚶 $name 까지 ${Geo.fmt(dist)} · 걸어서 약 ${min}분" + if (r == null) "\n(길 정보를 못 받아 곧은 선으로 보여요)" else ""
+            routeInfo.text = (if (car) "🚗 $name 까지 ${Geo.fmt(dist)} · 차로 약 ${min}분" else "🚶 $name 까지 ${Geo.fmt(dist)} · 걸어서 약 ${min}분") + if (r == null) "\n(길 정보를 못 받아 곧은 선으로 보여요)" else ""
+            routeKakaoBtn.background = round(if (car) C.CAR else C.BLUE, 14f)
             routeBar.visibility = View.VISIBLE
             addBtn.visibility = View.GONE
         }

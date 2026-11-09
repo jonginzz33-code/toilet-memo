@@ -6,12 +6,13 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** 걷는 길 찾기 (오픈스트리트맵 무료 길찾기, 키 필요 없음) */
+/** 길 찾기: 도보·차량 (오픈스트리트맵 무료 길찾기, 키 필요 없음) */
 object Walk {
     data class Route(val points: List<Pair<Double, Double>>, val meters: Double, val seconds: Double)
 
-    suspend fun route(sLat: Double, sLon: Double, eLat: Double, eLon: Double): Route? = withContext(Dispatchers.IO) {
-        val u = "https://routing.openstreetmap.de/routed-foot/route/v1/driving/$sLon,$sLat;$eLon,$eLat?overview=full&geometries=geojson"
+    suspend fun route(sLat: Double, sLon: Double, eLat: Double, eLon: Double, car: Boolean = false): Route? = withContext(Dispatchers.IO) {
+        val profile = if (car) "routed-car" else "routed-foot"
+        val u = "https://routing.openstreetmap.de/$profile/route/v1/driving/$sLon,$sLat;$eLon,$eLat?overview=full&geometries=geojson"
         val con = URL(u).openConnection() as HttpURLConnection
         con.setRequestProperty("User-Agent", "MyToiletApp/1.0 (kr.mytoilet.app)")
         con.connectTimeout = 8000

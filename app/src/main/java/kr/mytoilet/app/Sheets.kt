@@ -51,7 +51,7 @@ object Sheets {
         s.add(pwRow)
         if (t.memo.isNotBlank()) s.add(a.text("📝 ${t.memo}", 14f, C.TEXT2))
 
-        s.add(a.primaryBtn("🚶 길 보기") { s.dismiss(); a.showRoute(t.lat, t.lon, t.title()) })
+        s.add(routeButtons(a, s, t.lat, t.lon, t.title()))
         val row = a.hbox(8)
         row.add(a.btn("수정") { s.dismiss(); edit(a, t, t.lat, t.lon) }, 1f)
         row.add(a.btn("위치 옮기기") { s.dismiss(); a.startPlacing(t, t.lat, t.lon) }, 1f)
@@ -153,6 +153,14 @@ object Sheets {
     }
 
     // ---------------- 목록 ----------------
+
+    /** 🚗 차량 길찾기 / 🚶 도보 길찾기 */
+    private fun routeButtons(a: MainActivity, s: Sheet, lat: Double, lon: Double, name: String): View {
+        val r = a.hbox(8)
+        r.add(a.btn("🚗 차량 길찾기", C.CAR, Color.WHITE) { s.dismiss(); a.showRoute(lat, lon, name, car = true) }, 1f)
+        r.add(a.btn("🚶 도보 길찾기", C.BLUE, Color.WHITE) { s.dismiss(); a.showRoute(lat, lon, name, car = false) }, 1f)
+        return r
+    }
 
     /** 내가 올린 화장실 모음 (나만 보기 + 내가 그룹에 올린 것). 줄마다 그룹 공유 스위치 */
     fun myToilets(a: MainActivity) {
@@ -293,7 +301,7 @@ object Sheets {
             box.add(a.text("최근 신고 ${Geo.ago(un.last)} · 사유: " + un.reasons.entries.joinToString(", ") { "${it.key} ${it.value}" }, 12f, Color.WHITE))
             s.add(box)
         }
-        s.add(a.primaryBtn("🚶 길 보기") { s.dismiss(); a.showRoute(p.lat, p.lon, p.name) })
+        s.add(routeButtons(a, s, p.lat, p.lon, p.name))
         val ur = a.hbox(8)
         ur.add(a.btn("⛔ 사용불가 알리기", C.RED_BG, C.RED_TEXT, 0xFFF09595.toInt()) {
             Login.need(a, "사용불가를 알리려면") { s.dismiss(); reportUnavailable(a, p) }
