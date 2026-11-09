@@ -675,11 +675,16 @@ object Sheets {
         box.add(a.text("내 평가", 12f, C.TEXT2, 600))
         // 고르기만 하면 저장 안 됨 → '평가 저장'을 눌러야 서버에 올라감
         box.add(a.segmented(listOf("깨끗해요", "보통", "별로예요"), if (mineV < 0) -1 else mineV) { mineV = it })
-        for (tag in listOf("휴지 없음", "고장")) {
-            box.add(a.toggleRow(tag, chosen.contains(tag)) { on ->
-                if (on) chosen.add(tag) else chosen.remove(tag)
-            })
-        }
+        // 휴지: 있었어요 / 없었어요 (없었어요 = '휴지 없음'으로 저장)
+        val paperRow = a.hbox(10)
+        paperRow.add(a.text("휴지", 15f, C.TEXT, 600))
+        paperRow.add(a.segmented(listOf("있었어요", "없었어요"), if (chosen.contains("휴지 없음")) 1 else if (v.mine != null) 0 else -1) {
+            if (it == 1) chosen.add("휴지 없음") else chosen.remove("휴지 없음")
+        }, 1f)
+        box.add(paperRow)
+        box.add(a.toggleRow("고장 난 곳이 있었어요", chosen.contains("고장")) { on ->
+            if (on) chosen.add("고장") else chosen.remove("고장")
+        })
         box.add(a.btn("평가 저장", C.BLUE, Color.WHITE) { send() })
     }
 
