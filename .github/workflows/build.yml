@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,12 +21,54 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.10.2'
+
+      - name: Fonts (Pretendard)
+        run: |
+          mkdir -p app/src/main/assets/fonts
+          for w in Regular SemiBold Bold; do
+            curl -fsSL -o app/src/main/assets/fonts/Pretendard-$w.otf \
+              "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/public/static/Pretendard-$w.otf" \
+              || echo "font $w skipped"
+          done
+
+      - name: Upload key (if set)
+        env:
+          UPLOAD_KEYSTORE_B64: ${{ secrets.UPLOAD_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$UPLOAD_KEYSTORE_B64" ]; then
+            echo "$UPLOAD_KEYSTORE_B64" | base64 -d > $RUNNER_TEMP/upload.jks
+            echo "UPLOAD_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> $GITHUB_ENV
+          fi
 
       - name: Build
-        run: gradle assembleDebug --no-daemon
+        env:
+          KAKAO_KEY: ${{ secrets.KAKAO_KEY }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: gradle assemblePersonalRelease bundlePlayRelease --no-daemon --stacktrace
+
+      - name: Collect files
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/personal/release/*.apk out/toilet-memo.apk
+          cp app/build/outputs/bundle/playRelease/*.aab out/toilet-memo-play.aab
+          echo "VC=$((GITHUB_RUN_NUMBER + 100))" >> $GITHUB_ENV
+          echo "VN=$(grep -oE '^## v[0-9][0-9.]*' README.md | tail -1 | sed 's/## //')" >> $GITHUB_ENV
 
       - uses: actions/upload-artifact@v4
         with:
-          name: toilet-memo-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: toilet-memo
+          path: out/*
+
+      - name: Release (fixed APK link)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ env.VC }}
+          name: ${{ env.VN }} (build ${{ env.VC }})
+          body: "versionCode=${{ env.VC }}"
+          make_latest: true
+          files: |
+            out/toilet-memo.apk
+            out/toilet-memo-play.aab

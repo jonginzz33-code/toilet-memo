@@ -1,9 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+    <style name="AppTheme" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">#378ADD</item>
-        <item name="colorPrimaryDark">#185FA5</item>
-        <item name="colorAccent">#378ADD</item>
-        <item name="android:statusBarColor">#185FA5</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#1D9E75</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="bottomSheetDialogTheme">@style/GlassSheet</item>
+    </style>
+
+    <style name="GlassSheet" parent="Theme.Material3.Light.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/GlassSheetStyle</item>
+        <item name="android:backgroundDimAmount">0.18</item>
+        <item name="colorPrimary">#378ADD</item>
+    </style>
+
+    <style name="GlassSheetStyle" parent="Widget.Material3.BottomSheet.Modal">
+        <item name="backgroundTint">@android:color/transparent</item>
     </style>
 </resources>

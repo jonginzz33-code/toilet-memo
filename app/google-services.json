@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "994060179309",
+    "project_id": "my-toilet-ce481",
+    "storage_bucket": "my-toilet-ce481.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:994060179309:android:22272bd7951941b8656c64",
+        "android_client_info": {
+          "package_name": "kr.mytoilet.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD71izaYU46Nms8Top3x2mruYh7nPaqMbI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

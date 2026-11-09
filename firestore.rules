@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/config/admin)
+        && get(/databases/$(database)/documents/config/admin).data.uid == request.auth.uid;
+    }
+    function own() {
+      return signedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // 관리자 지정: 처음 한 번만 (아무도 없을 때)
+    match /config/admin {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && !exists(/databases/$(database)/documents/config/admin)
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 사용자 + 내 화장실 (나만 보기)
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow write: if signedIn() && request.auth.uid == uid;
+      match /toilets/{id} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // 그룹 + 그룹 화장실
+    match /groups/{gid} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.members == [request.auth.uid];
+      allow update: if signedIn() && (
+        resource.data.owner == request.auth.uid
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+      );
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+      match /toilets/{id} {
+        allow read, write: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/groups/$(gid)).data.members;
+      }
+    }
+
+    // 공중화장실 (관리자만 업데이트, 누구나 보기)
+    match /publicCells/{cell} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 사용불가 신고 · 다시 열림
+    match /unavail/{id} {
+      allow read: if true;
+      allow create, update: if own();
+      allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+    match /status/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    // 상태 투표 (깨끗해요 · 보통 · 별로예요)
+    match /votes/{id} {
+      allow read: if true;
+      allow create, update: if own();
+      allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // 사용자 메모
+    match /memos/{id} {
+      allow read: if true;
+      allow create: if own();
+      allow update: if signedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // 메모 신고 (관리자만 보기)
+    match /memoReports/{id} {
+      allow create: if own();
+      allow read, delete: if isAdmin();
+    }
+  }
+}
