@@ -322,6 +322,20 @@ object Cloud {
         db.collection("config").document("admin").set(mapOf("uid" to u, "at" to System.currentTimeMillis())).await()
     }
 
+    /** 총관리자: 모든 가입자 (최근 접속 순) */
+    data class UserRow(val uid: String, val name: String, val created: Long, val lastSeen: Long)
+
+    suspend fun allUsers(): List<UserRow> =
+        db.collection("users").get().await().documents.map {
+            val c = it.get("created")
+            val created = when (c) {
+                is Number -> c.toLong()
+                is com.google.firebase.Timestamp -> c.toDate().time
+                else -> 0L
+            }
+            UserRow(it.id, it.getString("name") ?: "이름 없음", created, it.getLong("lastSeen") ?: 0L)
+        }.sortedByDescending { it.lastSeen }
+
     suspend fun count(col: String): Long = db.collection(col).count().get(AggregateSource.SERVER).await().count
 
     suspend fun activeToday(): Long {

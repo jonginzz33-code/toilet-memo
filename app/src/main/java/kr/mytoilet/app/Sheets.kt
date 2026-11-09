@@ -166,6 +166,39 @@ object Sheets {
 
     // ---------------- 목록 ----------------
 
+    // ---------------- 가입자 목록 (총관리자) ----------------
+
+    fun users(a: MainActivity) {
+        val s = Sheet(a, "👤 가입자", half = true)
+        val box = a.vbox(8)
+        s.add(box)
+        box.add(a.text("불러오는 중…", 13f, C.TEXT3))
+        s.show()
+        a.lifecycleScope.launch {
+            val list = try { Cloud.allUsers() } catch (e: Exception) { box.removeAllViews(); box.add(a.text("불러오지 못했어요: ${e.message}", 13f, C.RED_TEXT)); return@launch }
+            val groups = try { Cloud.allGroups() } catch (_: Exception) { emptyList() }
+            box.removeAllViews()
+            val now = System.currentTimeMillis()
+            val today = list.count { now - it.lastSeen < Cloud.DAY }
+            val week = list.count { now - it.lastSeen < 7 * Cloud.DAY }
+            box.add(a.text("전체 ${list.size}명 · 오늘 접속 ${today}명 · 7일 안 접속 ${week}명", 13f, C.TEXT2, 700))
+            for (u in list) {
+                val r = a.vbox(2).apply { background = a.round(0xFFFFFFFF.toInt(), 12f); setPadding(a.dp(12), a.dp(9), a.dp(12), a.dp(9)) }
+                val head = a.hbox(6)
+                head.add(a.text(u.name, 15f, C.TEXT, 700), 1f)
+                if (u.uid == Cloud.uid) head.add(a.chip("나", C.BLUE_BG, C.BLUE_TEXT))
+                if (now - u.lastSeen < Cloud.DAY) head.add(a.chip("오늘 접속", C.GREEN_BG, C.GREEN_TEXT))
+                r.add(head)
+                val gs = groups.filter { u.uid in it.members }.joinToString(", ") { it.name + if (it.owner == u.uid) "(방장)" else "" }
+                r.add(a.text(
+                    "가입 ${if (u.created > 0) Geo.date(u.created) else "-"} · 최근 접속 ${if (u.lastSeen > 0) Geo.ago(u.lastSeen) else "-"}" +
+                        if (gs.isNotBlank()) "\n그룹: $gs" else "",
+                    12f, C.TEXT3))
+                box.add(r)
+            }
+        }
+    }
+
     // ---------------- 그룹 관리 (방장·부방장) ----------------
 
     fun groupManage(a: MainActivity, g0: Group) {
@@ -1069,6 +1102,9 @@ object Sheets {
             r.setOnClickListener { a.closeSheets(); partnerDetail(a, p) }
             box.add(r)
         }
+
+        // 가입자 목록 (총관리자)
+        box.add(a.btn("👤 모든 가입자 보기", C.BLUE, Color.WHITE) { users(a) })
 
         // 그룹 설정 (총관리자)
         box.add(a.text("👥 그룹 설정", 16f, C.TEXT, 800))

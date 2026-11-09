@@ -105,7 +105,7 @@ class MainActivity : AppCompatActivity() {
     private var routeCar = false
     private lateinit var routeKakaoBtn: TextView
     private lateinit var hint: TextView
-    private lateinit var followBtn: TextView
+    private lateinit var followBtn: ImageView
     private lateinit var loading: LinearProgressIndicator
     private lateinit var rightCol: LinearLayout
 
@@ -282,27 +282,23 @@ class MainActivity : AppCompatActivity() {
 
         // 오른쪽 버튼
         rightCol = vbox(8)
-        fun rbtn(s: String, onClick: () -> Unit) = text(s, 20f, C.TEXT, 700, Gravity.CENTER).apply {
-            background = glass(14f)
-            elevation = dpf(3f)
+        // 파란 동그라미 + 흰 선 아이콘 (C안)
+        fun rbtn(icon: Int, desc: String, onClick: () -> Unit) = ImageView(this).apply {
+            setImageResource(icon)
+            contentDescription = desc
+            scaleType = ImageView.ScaleType.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply { shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(C.BLUE) }
+            elevation = dpf(4f)
             setOnClickListener { onClick() }
         }
-        rightCol.addView(rbtn("🔍") { searchPlace() }, LinearLayout.LayoutParams(dp(46), dp(46)))
-        rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
-        rightCol.addView(rbtn("＋") { zoom(true) }, LinearLayout.LayoutParams(dp(46), dp(46)))
-        rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
-        rightCol.addView(rbtn("－") { zoom(false) }, LinearLayout.LayoutParams(dp(46), dp(46)))
-        rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
-        rightCol.addView(rbtn("◎") { goToMe() }, LinearLayout.LayoutParams(dp(46), dp(46)))
-        rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
-        followBtn = text("따라\n가기", 11f, C.TEXT, 700, Gravity.CENTER).apply {
-            background = glass(14f)
-            elevation = dpf(3f)
-            setOnClickListener { setFollow(!following) }
-        }
-        rightCol.addView(followBtn, LinearLayout.LayoutParams(dp(46), dp(46)))
-        rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
-        rightCol.addView(rbtn("☷") { Sheets.list(this) }, LinearLayout.LayoutParams(dp(46), dp(46)))
+        fun gap() = rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(8)))
+        rightCol.addView(rbtn(R.drawable.ic_btn_search, "위치 검색") { searchPlace() }, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
+        rightCol.addView(rbtn(R.drawable.ic_btn_plus, "확대") { zoom(true) }, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
+        rightCol.addView(rbtn(R.drawable.ic_btn_minus, "축소") { zoom(false) }, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
+        rightCol.addView(rbtn(R.drawable.ic_btn_locate, "내 위치") { goToMe() }, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
+        followBtn = rbtn(R.drawable.ic_btn_follow, "따라가기") { setFollow(!following) }
+        rightCol.addView(followBtn, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
+        rightCol.addView(rbtn(R.drawable.ic_btn_list, "가까운 순 목록") { Sheets.list(this) }, LinearLayout.LayoutParams(dp(46), dp(46)))
         root.addView(rightCol, FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply {
             marginEnd = dp(12)
         })
@@ -709,8 +705,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun setFollow(on: Boolean) {
         following = on
-        followBtn.background = if (on) round(C.BLUE, 14f) else glass(14f)
-        followBtn.setTextColor(if (on) Color.WHITE else C.TEXT)
+        // 따라가는 중: 진한 남색 + 흰 테두리
+        followBtn.background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(if (on) C.BLUE_TEXT else C.BLUE)
+            if (on) setStroke(dp(3), Color.WHITE)
+        }
         if (on) { goToMe(); hint.text = "내 위치를 따라가는 중 · 지도를 밀면 꺼져요" }
         else if (!placing) hint.text = "두 손가락으로 확대·축소"
     }
