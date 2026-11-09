@@ -9,6 +9,7 @@ on:
     branches: [ main ]
     paths:
       - scripts/public_toilets.py
+      - scripts/probe.py
       - .github/workflows/public-data.yml
 
 permissions:
@@ -19,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Probe
+        run: python3 scripts/probe.py
       - name: Fetch
         run: python3 scripts/public_toilets.py public-toilets.json.gz
       - name: Upload
