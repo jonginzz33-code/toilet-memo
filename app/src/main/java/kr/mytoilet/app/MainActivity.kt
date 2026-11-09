@@ -103,8 +103,8 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs(this)
         fused = LocationServices.getFusedLocationProviderClient(this)
         buildUi()
-        CrashLog.take(this)?.let { showCrash(it) }
-        startMap()
+        val crash = CrashLog.take(this)
+        if (crash != null) showCrash(crash) else startMap()
         if (hasLoc()) startLocation() else permLauncher.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
@@ -249,11 +249,13 @@ class MainActivity : AppCompatActivity() {
                 cm.setPrimaryClip(ClipData.newPlainText("crash", text))
                 toast("복사했어요. Claude에게 붙여 주세요")
             }
-            .setNegativeButton("닫기", null)
+            .setNegativeButton("지도 켜기") { _, _ -> startMap() }
+            .setCancelable(false)
             .show()
     }
 
     private fun showMapError(msg: String) {
+        if (Looper.myLooper() != Looper.getMainLooper()) { runOnUiThread { showMapError(msg) }; return }
         hint.text = msg
         hint.setTextColor(C.RED_TEXT)
         hint.background = round(C.RED_BG, 14f)
@@ -271,7 +273,7 @@ class MainActivity : AppCompatActivity() {
                 showMapError("지도를 열지 못했어요\n${error.message ?: error.javaClass.simpleName}")
             }
         }, object : KakaoMapReadyCallback() {
-            override fun onMapReady(kakaoMap: KakaoMap) {
+            override fun onMapReady(kakaoMap: KakaoMap) = runOnUiThread {
                 map = kakaoMap
                 try {
                     onMapReady(kakaoMap)
@@ -286,14 +288,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onMapReady(m: KakaoMap) {
+        // 카카오 지도는 이 신호들을 화면 스레드가 아닌 곳에서 보낼 수 있어서, 화면 스레드로 넘겨서 처리
         m.setOnLabelClickListener { _, _, label ->
-            onLabelClick(label)
+            runOnUiThread { onLabelClick(label) }
             true
         }
         m.setOnCameraMoveStartListener { _, _ ->
-            if (following && System.currentTimeMillis() - lastProgMove > 900) setFollow(false)
+            runOnUiThread {
+                if (following && System.currentTimeMillis() - lastProgMove > 900) setFollow(false)
+            }
         }
-        m.setOnCameraMoveEndListener { _, _, _ -> onCameraEnd() }
+        m.setOnCameraMoveEndListener { _, _, _ -> runOnUiThread { onCameraEnd() } }
         myLat?.let { updateMe() }
         handler.postDelayed({ onCameraEnd() }, 400)
     }
