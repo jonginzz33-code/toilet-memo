@@ -60,6 +60,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeBar: LinearLayout
     private lateinit var urgentBtn: TextView
     private lateinit var quickBar: LinearLayout
+    private lateinit var adminSwitch: TextView
 
     // 지도에 보일 종류 (관리자 퀵바로 바꿈. 일반 사용자는 공중화장실 스위치만)
     val showMine get() = !isAdmin || prefs.fMine
@@ -69,6 +70,11 @@ class MainActivity : AppCompatActivity() {
     /** 관리자 퀵바 다시 그리기 */
     fun refreshQuickBar() {
         if (!::quickBar.isInitialized) return
+        // 맨 위 관리자 스위치 (총관리자에게만 보임)
+        adminSwitch.visibility = if (realAdmin) View.VISIBLE else View.GONE
+        adminSwitch.text = if (prefs.adminView) "관리자 ON" else "관리자 OFF"
+        adminSwitch.setTextColor(if (prefs.adminView) Color.WHITE else C.TEXT2)
+        adminSwitch.background = if (prefs.adminView) round(C.CAR, 14f) else round(Color.WHITE, 14f, 1, 0xFFCCCCCC.toInt())
         quickBar.removeAllViews()
         quickBar.visibility = if (isAdmin) View.VISIBLE else View.GONE
         if (!isAdmin) return
@@ -129,7 +135,10 @@ class MainActivity : AppCompatActivity() {
     var groupToilets: List<Toilet> = emptyList()
     var publics: List<PublicToilet> = emptyList()
     var unavail: Map<String, Cloud.Unavail> = emptyMap()
-    var isAdmin = false
+    /** 진짜 총관리자인지 (서버 확인) */
+    var realAdmin = false
+    /** 지금 관리자 화면으로 보는지: 총관리자 + 맨 위 '관리자' 스위치 켜짐. 끄면 일반 사용자 화면 */
+    val isAdmin: Boolean get() = realAdmin && prefs.adminView
     /** 제휴 가게 (모든 사용자에게 보임) */
     var partners: List<Partner> = emptyList()
     /** 제휴 가게 자리 정하는 중이면 그 가게 (등록·수정 창으로 돌아감) */
@@ -238,6 +247,16 @@ class MainActivity : AppCompatActivity() {
         bar.add(titleBox, 1f)
         unavailChip = chip("", C.RED_BG, C.RED_TEXT).apply { visibility = View.GONE }
         bar.add(unavailChip)
+        adminSwitch = text("관리자 ON", 11f, Color.WHITE, 800, Gravity.CENTER).apply {
+            visibility = View.GONE
+            setPadding(dp(9), dp(5), dp(9), dp(5))
+            setOnClickListener {
+                prefs.adminView = !prefs.adminView
+                toast(if (prefs.adminView) "관리자 화면으로 바꿨어요" else "일반 사용자 화면으로 바꿨어요")
+                refreshQuickBar(); drawToilets(); onCameraEnd()
+            }
+        }
+        bar.add(adminSwitch)
         bar.add(text("☰", 22f, C.TEXT, 700, Gravity.CENTER).apply {
             setPadding(dp(10), dp(2), dp(10), dp(2))
             setOnClickListener { Sheets.menu(this@MainActivity) }
@@ -979,7 +998,7 @@ class MainActivity : AppCompatActivity() {
                 prefs.uploadedLocal = true
                 if (l.isNotEmpty() && !quiet) toast("폰에 있던 화장실 ${l.size}곳을 계정에 옮겼어요")
             }
-            isAdmin = Cloud.isAdmin()
+            realAdmin = Cloud.isAdmin()
             refreshQuickBar()
         } catch (e: Exception) {
             if (!quiet) toast("서버 연결 문제: ${e.message}")

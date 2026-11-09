@@ -140,6 +140,10 @@ class Prefs(ctx: Context) {
     var showPublic: Boolean
         get() = p.getBoolean("showPublic", true)
         set(v) = p.edit().putBoolean("showPublic", v).apply()
+    /** 총관리자가 관리자 화면으로 볼지 (끄면 일반 사용자 화면) */
+    var adminView: Boolean
+        get() = p.getBoolean("adminView", true)
+        set(v) = p.edit().putBoolean("adminView", v).apply()
     // 관리자 퀵바: 지도에 보일 종류
     var fMine: Boolean
         get() = p.getBoolean("fMine", true)

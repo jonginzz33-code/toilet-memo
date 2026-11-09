@@ -813,7 +813,7 @@ object Sheets {
         })
 
         s.add(a.btn("업데이트 확인 · 지금 v${BuildConfig.VERSION_NAME}") { a.checkUpdate(silent = false) })
-        if (a.isAdmin || Cloud.loggedIn) s.add(a.btn("🛠 관리자 페이지") { s.dismiss(); admin(a) })
+        if (a.isAdmin || (Cloud.loggedIn && !a.realAdmin)) s.add(a.btn("🛠 관리자 페이지") { s.dismiss(); admin(a) })
         s.add(a.btn("개인정보처리방침") {
             a.showPrivacy()
         })
@@ -947,7 +947,7 @@ object Sheets {
                     box.add(a.text("아직 관리자가 없어요. 처음 한 번만 등록하면 이 계정이 관리자가 돼요.", 14f, C.TEXT2))
                     box.add(a.primaryBtn("이 계정을 관리자로 등록") {
                         a.lifecycleScope.launch {
-                            try { Cloud.claimAdmin(); a.isAdmin = true; a.refreshQuickBar(); s.dismiss(); admin(a) } catch (e: Exception) { a.toast("실패: ${e.message}") }
+                            try { Cloud.claimAdmin(); a.realAdmin = true; a.refreshQuickBar(); s.dismiss(); admin(a) } catch (e: Exception) { a.toast("실패: ${e.message}") }
                         }
                     })
                     return@launch
@@ -956,7 +956,7 @@ object Sheets {
                     box.add(a.text("관리자만 볼 수 있어요.", 14f, C.TEXT2))
                     return@launch
                 }
-                a.isAdmin = true
+                a.realAdmin = true
                 a.refreshQuickBar()
                 fillAdmin(a, box)
             } catch (e: Exception) {
