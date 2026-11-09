@@ -71,6 +71,19 @@ class MainActivity : AppCompatActivity() {
     private var meLabel: Label? = null
     private var meFrame = 0
     private var meStyles: Array<LabelStyles>? = null
+    private var meScale = 0f
+
+    /** 지도를 축소해서 넓게 볼수록 표시를 작게 (확대 단계 18 이상이면 원래 크기) */
+    private fun iconScale(): Float {
+        val z = map?.cameraPosition?.zoomLevel ?: 16
+        return when {
+            z >= 18 -> 1f
+            z == 17 -> 0.85f
+            z == 16 -> 0.7f
+            z == 15 -> 0.58f
+            else -> 0.48f
+        }
+    }
 
     var mine: List<Toilet> = emptyList()
     var groups: List<Group> = emptyList()
@@ -344,6 +357,7 @@ class MainActivity : AppCompatActivity() {
         try {
             computeRadius()
             drawToilets()
+            updateMe()
         } catch (e: Exception) {
             showMapError("화장실 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
             return
@@ -381,9 +395,10 @@ class MainActivity : AppCompatActivity() {
         val limit = if (prefs.circleOnly) radiusM else radiusM * 2.2
         var shown = 0
         var unavailIn = 0
+        val scale = iconScale()
 
         fun addLabel(id: String, lat: Double, lon: Double, color: Int, label: String, outline: Boolean, un: Int, target: Any) {
-            val bmp = Icons.toilet(this, color, label, un, outline)
+            val bmp = Icons.toilet(this, color, label, un, outline, scale)
             val ay = Icons.toiletAnchorY(this, un)
             val opt = LabelOptions.from(id, LatLng.from(lat, lon))
                 .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay)))
@@ -460,10 +475,12 @@ class MainActivity : AppCompatActivity() {
         val lat = myLat ?: return
         val lon = myLon ?: return
         val layer = m.labelManager?.layer ?: return
-        if (meStyles == null) {
+        val sc = iconScale()
+        if (meStyles == null || sc != meScale) {
+            meScale = sc
             meStyles = arrayOf(
-                LabelStyles.from(LabelStyle.from(Icons.character(this, prefs.character, 0)).setAnchorPoint(0.5f, 0.9f)),
-                LabelStyles.from(LabelStyle.from(Icons.character(this, prefs.character, 1)).setAnchorPoint(0.5f, 0.9f))
+                LabelStyles.from(LabelStyle.from(Icons.character(this, prefs.character, 0, sc)).setAnchorPoint(0.5f, 0.9f)),
+                LabelStyles.from(LabelStyle.from(Icons.character(this, prefs.character, 1, sc)).setAnchorPoint(0.5f, 0.9f))
             )
             meLabel?.let { try { layer.remove(it) } catch (_: Exception) {} }
             meLabel = null

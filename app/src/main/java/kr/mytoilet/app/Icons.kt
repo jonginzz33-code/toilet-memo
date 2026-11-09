@@ -13,8 +13,8 @@ import kotlin.math.max
 object Icons {
 
     /** 남녀 그림 화장실 표시 + 아래 이름표. unavailable>0 이면 빨간 사용불가 표시 */
-    fun toilet(ctx: Context, color: Int, label: String, unavailable: Int = 0, outline: Boolean = false): Bitmap {
-        val d = ctx.resources.displayMetrics.density
+    fun toilet(ctx: Context, color: Int, label: String, unavailable: Int = 0, outline: Boolean = false, scale: Float = 1f): Bitmap {
+        val d = ctx.resources.displayMetrics.density * scale
         val red = unavailable > 0
         val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = 11 * d
@@ -122,8 +122,8 @@ object Icons {
     }
 
     /** 내 위치 캐릭터: 0 동글이, 1 휴지 친구, 2 물방울이. frame 0/1 로 움찔 */
-    fun character(ctx: Context, style: Int, frame: Int): Bitmap {
-        val d = ctx.resources.displayMetrics.density
+    fun character(ctx: Context, style: Int, frame: Int, scale: Float = 1f): Bitmap {
+        val d = ctx.resources.displayMetrics.density * scale
         val s = 64 * d
         val bmp = Bitmap.createBitmap(s.toInt(), s.toInt(), Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
