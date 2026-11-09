@@ -60,6 +60,27 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 제휴 가게 (관리자만 등록·수정, 누구나 보기)
+    match /partners/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 제휴 가게 통계 (누구나 횟수만 늘릴 수 있음, 관리자만 보기)
+    match /partnerStats/{id} {
+      function okKeys() {
+        return request.resource.data.keys().hasOnly(['views', 'opens', 'routes', 'visits', 'coupons', 'partnerId', 'month'])
+          && exists(/databases/$(database)/documents/partners/$(request.resource.data.partnerId));
+      }
+      function notLess(k) {
+        return !(k in resource.data) || (request.resource.data[k] is int && request.resource.data[k] >= resource.data[k]);
+      }
+      allow read: if isAdmin();
+      allow create: if okKeys();
+      allow update: if okKeys() && notLess('views') && notLess('opens') && notLess('routes') && notLess('visits') && notLess('coupons');
+      allow delete: if isAdmin();
+    }
+
     // 사용불가 신고 · 다시 열림
     match /unavail/{id} {
       allow read: if true;

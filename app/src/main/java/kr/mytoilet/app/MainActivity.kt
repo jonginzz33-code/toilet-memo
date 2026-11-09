@@ -100,6 +100,32 @@ class MainActivity : AppCompatActivity() {
     var publics: List<PublicToilet> = emptyList()
     var unavail: Map<String, Cloud.Unavail> = emptyMap()
     var isAdmin = false
+    /** 제휴 가게 (모든 사용자에게 보임) */
+    var partners: List<Partner> = emptyList()
+    /** 제휴 가게 자리 정하는 중이면 그 가게 (등록·수정 창으로 돌아감) */
+    private var partnerDraft: Partner? = null
+    private var photoCallback: ((android.net.Uri?) -> Unit)? = null
+    private val photoPicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        photoCallback?.invoke(uri); photoCallback = null
+    }
+
+    fun pickPhoto(cb: (android.net.Uri?) -> Unit) {
+        photoCallback = cb
+        photoPicker.launch("image/*")
+    }
+
+    suspend fun reloadPartners() {
+        partners = try { Partners.all() } catch (_: Exception) { partners }
+        drawToilets()
+    }
+
+    /** 관리자: 제휴 가게 자리를 지도에서 핀으로 정하기 */
+    fun startPartnerPlacing(draft: Partner) {
+        val (lat, lon) = if (draft.lat != 0.0) draft.lat to draft.lon else center()
+        startPlacing(null, lat, lon)
+        partnerDraft = draft
+        hint.text = "지도를 움직여 빨간 핀을 제휴 가게 자리에 맞추세요"
+    }
 
     private val labelTargets = HashMap<String, Any>()
     private val toiletLabels = mutableListOf<Label>()
@@ -142,6 +168,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             if (Cloud.loggedIn) afterLogin(quiet = true) else reloadMine()
             refreshUnavailable()
+            reloadPartners()
             checkUpdate(silent = true)
         }
         handler.postDelayed(wiggle, 500)
@@ -469,6 +496,19 @@ class MainActivity : AppCompatActivity() {
             if (Geo.dist(clat, clon, t.lat, t.lon) > limit) continue
             addLabel("m_${t.id}", t.lat, t.lon, C.ORANGE, "나만 보기 · ${Geo.agoShort(t.updated)}", false, 0, t); shown++
         }
+        // 제휴 가게: 화장실처럼 보고 있는 범위 안만, 크게
+        for (p in partners) {
+            if (Geo.dist(clat, clon, p.lat, p.lon) > limit) continue
+            val (bmp, ay) = Icons.partnerPin(this, p.bitmap(), "제휴 · ${p.name}", scale)
+            val id = "pt_${p.id}"
+            val opt = LabelOptions.from(id, LatLng.from(p.lat, p.lon))
+                .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay)))
+                .setClickable(true)
+                .setRank(100L)
+            layer.addLabel(opt)?.let { toiletLabels.add(it); labelTargets[id] = p }
+            Partners.countView(p.id)
+            shown++
+        }
         countText.text = if (prefs.circleOnly) "원 안 화장실 ${shown}곳" else "근처 화장실 ${shown}곳"
         unavailChip.text = "근처 사용불가 ${unavailIn}곳"
         unavailChip.visibility = if (unavailIn > 0) View.VISIBLE else View.GONE
@@ -479,6 +519,7 @@ class MainActivity : AppCompatActivity() {
         when (val t = labelTargets[label.labelId]) {
             is Toilet -> Sheets.toiletDetail(this, t)
             is PublicToilet -> Sheets.publicDetail(this, t)
+            is Partner -> Sheets.partnerDetail(this, t)
         }
     }
 
@@ -585,6 +626,7 @@ class MainActivity : AppCompatActivity() {
             } catch (_: Exception) {}
             busy(false)
             val cands = (mine + groupToilets).map { Triple(it.lat, it.lon, it.title()) } +
+                partners.map { Triple(it.lat, it.lon, it.name) } +
                 pubs.filter { (unavail[it.id]?.count ?: 0) == 0 }.map { Triple(it.lat, it.lon, it.name) }
             val best = cands.minByOrNull { Geo.dist(lat, lon, it.first, it.second) }
             if (best == null || Geo.dist(lat, lon, best.first, best.second) > 2000) {
@@ -775,6 +817,7 @@ class MainActivity : AppCompatActivity() {
     fun exitPlacing() {
         placing = false
         movingTarget = null
+        partnerDraft = null
         centerPin.visibility = View.GONE
         placeBar.visibility = View.GONE
         addBtn.visibility = View.VISIBLE
@@ -785,6 +828,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun confirmPlace() {
         val (lat, lon) = center()
+        partnerDraft?.let { d ->
+            d.lat = lat; d.lon = lon
+            exitPlacing()
+            Sheets.partnerEdit(this, d)
+            return
+        }
         val t = movingTarget
         if (t != null) {
             t.lat = lat; t.lon = lon; t.updated = System.currentTimeMillis()
@@ -912,6 +961,12 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         mapView.pause()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // 제휴 가게 통계를 모아서 한 번에 올림
+        lifecycleScope.launch { Partners.flush() }
     }
 
     override fun onDestroy() {

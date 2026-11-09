@@ -259,8 +259,24 @@ class Sheet(val activity: Activity, title: String?, half: Boolean = false) {
     }
 
     fun add(v: View): View { body.add(v); return v }
-    fun show(): Sheet { dialog.show(); return this }
+    fun show(): Sheet {
+        open.add(this)
+        dialog.setOnDismissListener { open.remove(this) }
+        dialog.show()
+        return this
+    }
+
+    companion object {
+        /** 지금 열려 있는 창들 (한 번에 닫기용) */
+        val open = mutableListOf<Sheet>()
+    }
     fun dismiss() = dialog.dismiss()
+}
+
+/** 열려 있는 아래 창 모두 닫기 */
+fun Activity.closeSheets() {
+    Sheet.open.toList().forEach { try { it.dismiss() } catch (_: Exception) {} }
+    Sheet.open.clear()
 }
 
 /** 확인 창 (모달) */

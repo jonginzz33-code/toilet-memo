@@ -3,6 +3,7 @@ package kr.mytoilet.app
 import android.graphics.Color
 import android.view.Gravity
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
@@ -165,6 +166,276 @@ object Sheets {
 
     // ---------------- 목록 ----------------
 
+    // ---------------- 제휴 가게 ----------------
+
+    private fun photoView(a: MainActivity, b: android.graphics.Bitmap?, sizeDp: Int): View =
+        if (b != null) android.widget.ImageView(a).apply {
+            setImageBitmap(b)
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            clipToOutline = true
+            background = a.round(0xFFFFFFFF.toInt(), 14f)
+            layoutParams = LinearLayout.LayoutParams(a.dp(sizeDp), a.dp(sizeDp))
+        } else a.text("🤝", (sizeDp / 2.2f), C.TEXT, 400, Gravity.CENTER).apply {
+            background = a.round(C.GREEN_BG, 14f)
+            layoutParams = LinearLayout.LayoutParams(a.dp(sizeDp), a.dp(sizeDp))
+        }
+
+    fun partnerDetail(a: MainActivity, p: Partner) {
+        Partners.count(p.id, Partners.OPEN)
+        val s = Sheet(a, null)
+        val (mlat, mlon) = a.myLat?.let { it to (a.myLon ?: 0.0) } ?: (null to null)
+        val dist = if (mlat != null && mlon != null) Geo.dist(mlat, mlon, p.lat, p.lon) else null
+
+        val head = a.hbox(12)
+        head.addView(photoView(a, p.bitmap(), 58))
+        val ht = a.vbox(4)
+        ht.add(a.text(p.name, 20f, C.TEXT, 700))
+        val chips = a.hbox(6)
+        chips.add(a.chip("🤝 제휴 개방화장실", C.GREEN_BG, C.GREEN_TEXT))
+        if (dist != null) chips.add(a.text(Geo.fmt(dist), 13f, C.TEXT2))
+        ht.add(chips)
+        head.add(ht, 1f)
+        s.add(head)
+
+        if (p.rule.isNotBlank()) s.add(a.text("📢 ${p.rule}", 15f, C.AMBER_TEXT, 800).apply {
+            background = a.round(C.AMBER_BG, 12f); setPadding(a.dp(12), a.dp(9), a.dp(12), a.dp(9))
+        })
+
+        // 비밀번호 칸
+        val pwText: String
+        var pwSub: String? = null
+        when {
+            p.pwMode == "staff" || p.pw.isBlank() -> { pwText = "🙋 직원에게 말씀해 주세요"; if (p.pwMode == "staff") pwSub = "이 가게는 비밀번호 대신 직원이 안내해요" }
+            p.pwNear && (dist == null || dist > 50) -> {
+                pwText = "🔒 비밀번호는 매장 50m 안에서 보여요"
+                pwSub = if (dist == null) "내 위치를 찾으면 확인할 수 있어요" else "지금 ${Geo.fmt(dist)} · 가까이 가서 다시 열어 주세요"
+            }
+            else -> pwText = "🔑 ${p.pw}"
+        }
+        val pwBox = a.vbox(2).apply { background = a.round(C.GRAY_BG, 14f); setPadding(a.dp(14), a.dp(10), a.dp(14), a.dp(10)) }
+        pwBox.add(a.text(pwText, if (pwText.startsWith("🔑")) 22f else 17f, C.TEXT, 800).apply { setTextIsSelectable(true) })
+        pwSub?.let { pwBox.add(a.text(it, 12f, C.TEXT3)) }
+        s.add(pwBox)
+
+        val info = listOf(p.place.takeIf { it.isNotBlank() }?.let { "📍 $it" }, p.open.takeIf { it.isNotBlank() }?.let { "🕒 $it" }).filterNotNull()
+        if (info.isNotEmpty()) s.add(a.text(info.joinToString("  ·  "), 14f, C.TEXT2))
+
+        // 쿠폰 (체크한 가게만)
+        if (p.coupon && p.couponText.isNotBlank()) {
+            s.add(a.text("🎁 ${p.couponText}", 15f, C.AMBER_TEXT, 800).apply {
+                background = a.round(C.AMBER_BG, 14f, 2, C.AMBER); setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10))
+            })
+            s.add(a.btn("🎁 쿠폰 보여 주기", C.AMBER, Color.WHITE) { Partners.count(p.id, Partners.COUPON); showCoupon(a, p) })
+        }
+
+        val rr = a.hbox(8)
+        rr.add(a.btn("🚗 차량 길찾기", C.CAR, Color.WHITE) { Partners.count(p.id, Partners.ROUTE); s.dismiss(); a.showRoute(p.lat, p.lon, p.name, car = true) }, 1f)
+        rr.add(a.btn("🚶 도보 길찾기", C.BLUE, Color.WHITE) { Partners.count(p.id, Partners.ROUTE); s.dismiss(); a.showRoute(p.lat, p.lon, p.name, car = false) }, 1f)
+        s.add(rr)
+
+        val vr = a.hbox(8)
+        vr.add(a.btn("다녀왔어요", C.GREEN, Color.WHITE) {
+            Login.need(a, "다녀왔다고 알리려면") {
+                a.lifecycleScope.launch {
+                    try { Cloud.visit(p.statusId); Partners.count(p.id, Partners.VISIT); a.toast("고마워요! 다른 사람들도 볼 수 있어요") } catch (e: Exception) { a.toast("실패: ${e.message}") }
+                }
+            }
+        }, 1f)
+        vr.add(a.btn("⛔ 사용불가 알리기", C.RED_BG, C.RED_TEXT) {
+            Login.need(a, "사용불가를 알리려면") { s.dismiss(); reportUnavailable(a, PublicToilet(p.statusId, p.name, p.addr, p.lat, p.lon)) }
+        }, 1f)
+        s.add(vr)
+
+        if (a.isAdmin) {
+            val ar = a.hbox(8)
+            ar.add(a.btn("수정") { s.dismiss(); partnerEdit(a, p.copy()) }, 1f)
+            ar.add(a.btn("📊 통계") { partnerStats(a, p) }, 1f)
+            ar.add(a.btn("삭제", C.RED_BG, C.RED_TEXT) {
+                s.dismiss()
+                a.confirm("삭제할까요?", "${p.name} 제휴 가게를 지도에서 지워요.", "삭제", true) {
+                    a.lifecycleScope.launch {
+                        try { Partners.delete(p); a.reloadPartners(); a.toast("삭제했어요") } catch (e: Exception) { a.toast("실패: ${e.message}") }
+                    }
+                }
+            }, 1f)
+            s.add(ar)
+        }
+        s.show()
+    }
+
+    /** 화면 가득 쿠폰 (직원에게 보여 주기) */
+    private fun showCoupon(a: MainActivity, p: Partner) {
+        val d = android.app.Dialog(a, android.R.style.Theme_Material_Light_NoActionBar_Fullscreen)
+        val root = a.vbox(16).apply {
+            gravity = Gravity.CENTER
+            setPadding(a.dp(28), a.dp(28), a.dp(28), a.dp(28))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR, intArrayOf(0xFFFFF4D6.toInt(), 0xFFFDE3B0.toInt()))
+        }
+        root.addView(photoView(a, p.bitmap(), 96).apply { (layoutParams as LinearLayout.LayoutParams).gravity = Gravity.CENTER_HORIZONTAL })
+        root.add(a.text(p.name, 22f, C.TEXT, 800, Gravity.CENTER))
+        root.add(a.text("🎁 ${p.couponText}", 26f, C.AMBER_TEXT, 800, Gravity.CENTER).apply {
+            background = a.round(0xFFFFFFFF.toInt(), 18f, 3, C.AMBER); setPadding(a.dp(18), a.dp(22), a.dp(18), a.dp(22))
+        })
+        root.add(a.text("나만의 화장실 앱 쿠폰 · ${Geo.date(System.currentTimeMillis())}", 13f, C.TEXT2, 600, Gravity.CENTER))
+        root.add(a.btn("닫기") { d.dismiss() })
+        d.setContentView(root)
+        d.show()
+    }
+
+    /** 관리자: 제휴 가게 등록·수정 (위치는 이미 핀으로 정해진 상태) */
+    fun partnerEdit(a: MainActivity, p: Partner) {
+        val isNew = a.partners.none { it.id == p.id }
+        val s = Sheet(a, if (isNew) "🤝 제휴 가게 등록" else "🤝 제휴 가게 수정")
+        val (b1, name) = a.field("가게 이름 (필수)", "***** 안양점", p.name)
+        s.add(b1)
+
+        // 사진
+        s.add(a.text("🖼 가게 사진 (핀에 보여요)", 12f, C.TEXT2, 600))
+        val photoRow = a.hbox(10)
+        var img = p.img
+        val holder = FrameLayout(a)
+        fun showPhoto() { holder.removeAllViews(); holder.addView(photoView(a, Partners.decode(img), 64)) }
+        showPhoto()
+        photoRow.addView(holder)
+        val pv = a.vbox(4)
+        pv.add(a.btn("📷 사진 고르기", C.BLUE, Color.WHITE) {
+            a.pickPhoto { uri ->
+                if (uri == null) return@pickPhoto
+                val b = Partners.loadPhoto(a, uri)
+                if (b == null) a.toast("사진을 불러오지 못했어요") else { img = b; showPhoto() }
+            }
+        })
+        pv.add(a.text("가운데를 동그랗게 잘라 작게 줄여서 저장해요", 11f, C.TEXT3))
+        photoRow.add(pv, 1f)
+        s.add(photoRow)
+
+        // 위치
+        val locText = a.text("📍 확인 중…", 13f, C.BLUE_TEXT)
+        s.add(locText)
+        if (p.addr.isNotBlank()) locText.text = "📍 ${p.addr}"
+        a.lifecycleScope.launch {
+            val g = try { KakaoLocal.guess(p.lat, p.lon) } catch (_: Exception) { null }
+            if (g != null && g.address.isNotBlank()) { p.addr = g.address; locText.text = "📍 ${g.address}" }
+            else if (p.addr.isBlank()) locText.text = "📍 %.5f, %.5f".format(p.lat, p.lon)
+        }
+
+        val (b2, place) = a.field("화장실 위치 설명", "매장 안쪽 왼쪽 문", p.place)
+        val (b3, open) = a.field("개방 시간", "07:00~22:00", p.open)
+        val (b4, rule) = a.field("이용 규칙 (맨 위에 크게 보여요)", "구매 고객 전용", p.rule)
+        listOf(b2, b3, b4).forEach { s.add(it) }
+
+        // 비밀번호 칸
+        s.add(a.text("비밀번호 칸", 12f, C.TEXT2, 600))
+        var pwMode = p.pwMode
+        val pwBox = a.vbox(8)
+        val (b5, pw) = a.field("비밀번호", "1234*", p.pw)
+        var pwNear = p.pwNear
+        pwBox.add(b5)
+        pwBox.add(a.toggleRow("🔒 번호는 매장 50m 안에서만 보이기", pwNear, "멀리서 캡처해서 퍼뜨리는 걸 막아요") { pwNear = it })
+        val staffNote = a.text("상세 창 비밀번호 칸에 '🙋 직원에게 말씀해 주세요'가 크게 나와요", 12f, C.TEXT3)
+        fun paintPw() {
+            pwBox.visibility = if (pwMode == "pw") View.VISIBLE else View.GONE
+            staffNote.visibility = if (pwMode == "staff") View.VISIBLE else View.GONE
+        }
+        s.add(a.segmented(listOf("번호 입력", "🙋 직원에게 문의"), if (pwMode == "pw") 0 else 1) { pwMode = if (it == 0) "pw" else "staff"; paintPw() })
+        s.add(staffNote)
+        s.add(pwBox)
+        paintPw()
+
+        // 쿠폰
+        var coupon = p.coupon
+        val (b6, couponText) = a.field("🎁 혜택 쿠폰 문구", "앱 화면 보여 주면 음료 500원 할인", p.couponText)
+        s.add(a.toggleRow("🎁 쿠폰 있음", coupon, "끄면 쿠폰 칸이 아예 안 보여요") { coupon = it; b6.visibility = if (it) View.VISIBLE else View.GONE })
+        s.add(b6)
+        b6.visibility = if (coupon) View.VISIBLE else View.GONE
+
+        val err = a.text("", 13f, C.RED_TEXT)
+        s.add(err)
+        val row = a.hbox(8)
+        row.add(a.btn("📍 위치 다시 정하기") {
+            p.name = name.text.toString().trim(); p.img = img; p.place = place.text.toString().trim()
+            p.open = open.text.toString().trim(); p.rule = rule.text.toString().trim(); p.pwMode = pwMode
+            p.pw = pw.text.toString().trim(); p.pwNear = pwNear; p.coupon = coupon; p.couponText = couponText.text.toString().trim()
+            s.dismiss(); a.startPartnerPlacing(p)
+        }, 1f)
+        row.add(a.btn(if (isNew) "등록하기" else "저장", C.GREEN, Color.WHITE) {
+            val n = name.text.toString().trim()
+            if (n.isEmpty()) { err.text = "가게 이름을 적어 주세요"; return@btn }
+            if (coupon && couponText.text.isBlank()) { err.text = "쿠폰 문구를 적거나 '쿠폰 있음'을 꺼 주세요"; return@btn }
+            p.name = n; p.img = img; p.place = place.text.toString().trim(); p.open = open.text.toString().trim()
+            p.rule = rule.text.toString().trim(); p.pwMode = pwMode; p.pw = pw.text.toString().trim(); p.pwNear = pwNear
+            p.coupon = coupon; p.couponText = if (coupon) couponText.text.toString().trim() else ""
+            s.dismiss()
+            a.lifecycleScope.launch {
+                a.busy(true)
+                try { Partners.save(p); a.reloadPartners(); a.toast(if (isNew) "제휴 가게를 등록했어요" else "저장했어요") }
+                catch (e: Exception) { a.toast("저장하지 못했어요: ${e.message}") }
+                finally { a.busy(false) }
+            }
+        }, 1f)
+        s.add(row)
+        s.show()
+    }
+
+    /** 관리자: 가게별 이번 달 통계 + 사장님께 보낼 이미지 */
+    fun partnerStats(a: MainActivity, p: Partner) {
+        val s = Sheet(a, "📊 ${p.name}")
+        val card = a.vbox(8).apply { background = a.round(0xFFFFFFFF.toInt(), 16f); setPadding(a.dp(16), a.dp(14), a.dp(16), a.dp(14)) }
+        val month = java.text.SimpleDateFormat("yyyy년 M월", java.util.Locale.KOREA).format(java.util.Date())
+        card.add(a.text("${p.name} · $month", 15f, C.TEXT, 800))
+        val body = a.vbox(8)
+        body.add(a.text("불러오는 중…", 13f, C.TEXT3))
+        card.add(body)
+        s.add(card)
+        s.add(a.btn("📤 사장님께 보낼 이미지로 저장·공유", C.GREEN, Color.WHITE) { shareView(a, card, "partner_stats.png") })
+        s.add(a.text("지도에 보임은 앱을 켤 때마다 가게당 한 번씩 세요. 사용자 폰에서 모았다가 한 번에 올려서 조금 늦게 반영될 수 있어요.", 11f, C.TEXT3))
+        s.show()
+        a.lifecycleScope.launch {
+            val st = try { Partners.stats(p.id) } catch (e: Exception) { body.removeAllViews(); body.add(a.text("불러오지 못했어요: ${e.message}", 13f, C.RED_TEXT)); return@launch }
+            body.removeAllViews()
+            val rows = listOf(
+                "지도에 보임" to Partners.VIEW, "상세 열어 봄" to Partners.OPEN, "길찾기" to Partners.ROUTE,
+                "다녀왔어요" to Partners.VISIT
+            ) + (if (p.coupon) listOf("🎁 쿠폰 보여 줌" to Partners.COUPON) else emptyList())
+            val maxV = (rows.maxOfOrNull { st[it.second] ?: 0L } ?: 0L).coerceAtLeast(1L)
+            for ((label, key) in rows) {
+                val v = st[key] ?: 0L
+                val r = a.hbox(8)
+                r.add(a.text(label, 13f, C.TEXT2).apply { minWidth = a.dp(92) })
+                val bar = View(a).apply { background = a.round(C.GREEN, 5f) }
+                r.addView(bar, LinearLayout.LayoutParams((a.dp(140) * v / maxV).toInt().coerceAtLeast(a.dp(4)), a.dp(14)))
+                r.add(a.text("%,d".format(v), 14f, C.TEXT, 800))
+                body.add(r)
+            }
+            val routes = st[Partners.ROUTE] ?: 0L
+            val coupons = st[Partners.COUPON] ?: 0L
+            body.add(a.text("💡 이번 달 이 앱으로 ${routes}명이 길찾기로 매장을 찾았어요" + if (p.coupon) ", ${coupons}명이 쿠폰을 보여 줬어요." else ".", 13f, C.TEXT2).apply {
+                background = a.round(C.GRAY_BG, 12f); setPadding(a.dp(10), a.dp(8), a.dp(10), a.dp(8))
+            })
+        }
+    }
+
+    /** 화면 일부를 그림으로 만들어 공유 (카톡 등) */
+    private fun shareView(a: MainActivity, v: View, name: String) {
+        try {
+            val b = android.graphics.Bitmap.createBitmap(v.width, v.height, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(b)
+            c.drawColor(Color.WHITE)
+            v.draw(c)
+            val dir = java.io.File(a.getExternalFilesDir(null), "updates").apply { mkdirs() }
+            val f = java.io.File(dir, name)
+            f.outputStream().use { b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            val uri = androidx.core.content.FileProvider.getUriForFile(a, "${a.packageName}.files", f)
+            a.startActivity(android.content.Intent.createChooser(
+                android.content.Intent(android.content.Intent.ACTION_SEND).setType("image/png")
+                    .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), "통계 보내기"))
+        } catch (e: Exception) {
+            a.toast("이미지를 만들지 못했어요: ${e.message}")
+        }
+    }
+
     /** 🚗 차량 길찾기 / 🚶 도보 길찾기 */
     private fun routeButtons(a: MainActivity, s: Sheet, lat: Double, lon: Double, name: String): View {
         val r = a.hbox(8)
@@ -264,12 +535,14 @@ object Sheets {
             box.removeAllViews()
             val items: List<Pair<Any, Double>> =
                 ((a.mine + a.groupToilets).map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) } +
-                    publics.map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) }.filter { it.second <= 2000 })
+                    publics.map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) }.filter { it.second <= 2000 } +
+                    a.partners.map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) }.filter { it.second <= 2000 })
                     .sortedBy { it.second }
             if (items.isEmpty()) box.add(a.text("근처에 화장실이 없어요.\n맨 위 '＋ 화장실 추가'로 저장해 보세요.", 15f, C.TEXT2))
             for ((x, d) in items.take(80)) {
                 when (x) {
                     is Toilet -> box.add(row(x.title(), "${Geo.fmt(d)} · ${Geo.agoShort(x.updated)} · ${x.place.ifBlank { "위치 설명 없음" }}", scopeChip(a, x)) { toiletDetail(a, x) })
+                    is Partner -> box.add(row(x.name, "${Geo.fmt(d)} · ${x.rule.ifBlank { x.addr }}", a.chip("🤝 제휴", C.GREEN_BG, C.GREEN_TEXT)) { partnerDetail(a, x) })
                     is PublicToilet -> box.add(row(x.name, "${Geo.fmt(d)} · ${x.addr.ifBlank { "공중화장실" }}", a.chip("공중화장실", C.GRAY_BG, C.TEXT2)) { publicDetail(a, x) })
                 }
             }
@@ -688,6 +961,23 @@ object Sheets {
     }
 
     private suspend fun fillAdmin(a: MainActivity, box: LinearLayout) {
+        // 제휴 가게
+        box.add(a.text("🤝 제휴 가게 (${a.partners.size}곳)", 12f, C.TEXT2, 600))
+        box.add(a.btn("＋ 제휴 가게 등록", C.GREEN, Color.WHITE) {
+            a.closeSheets()   // 창 닫고 지도에서 자리 정하기
+            a.startPartnerPlacing(Partner())
+        })
+        for (p in a.partners.sortedBy { it.name }) {
+            val r = a.hbox(8).apply {
+                background = a.round(0xFFFFFFFF.toInt(), 12f)
+                setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10))
+            }
+            r.add(a.text(p.name, 14f, C.TEXT, 700), 1f)
+            r.add(a.text("📊 통계", 13f, C.GREEN_TEXT, 700).apply { setOnClickListener { partnerStats(a, p) } })
+            r.setOnClickListener { a.closeSheets(); partnerDetail(a, p) }
+            box.add(r)
+        }
+
         box.add(a.text("사용 현황", 12f, C.TEXT2, 600))
         val grid = a.vbox(6)
         fun stat(label: String, v: String) {
