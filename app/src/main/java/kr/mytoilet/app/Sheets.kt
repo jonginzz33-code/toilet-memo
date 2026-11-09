@@ -154,6 +154,69 @@ object Sheets {
 
     // ---------------- 목록 ----------------
 
+    /** 내가 올린 화장실 모음 (나만 보기 + 내가 그룹에 올린 것). 줄마다 그룹 공유 스위치 */
+    fun myToilets(a: MainActivity) {
+        val s = Sheet(a, "📁 나의 화장실", half = true)
+        val box = a.vbox(8)
+        s.add(box)
+
+        fun fill() {
+            box.removeAllViews()
+            val list = (a.mine + a.groupToilets.filter { it.by.isNotEmpty() && it.by == Cloud.uid })
+                .distinctBy { it.id }.sortedByDescending { it.updated }
+            val canGroup = Cloud.loggedIn && a.groups.isNotEmpty()
+            box.add(a.text(
+                "${list.size}곳 · 스위치를 켜면 그룹에 공유돼요" +
+                    if (!canGroup) "\n(그룹 공유는 로그인 후 그룹을 만들면 쓸 수 있어요)" else "",
+                12f, C.TEXT3))
+            if (list.isEmpty()) box.add(a.text("아직 올린 화장실이 없어요.\n맨 위 '＋ 화장실 추가'로 저장해 보세요.", 15f, C.TEXT2))
+            for (t in list) {
+                val row = a.hbox(10).apply {
+                    background = a.round(0xFFFFFFFF.toInt(), 14f)
+                    setPadding(a.dp(12), a.dp(10), a.dp(8), a.dp(10))
+                }
+                val tx = a.vbox(2)
+                tx.add(a.text(t.title(), 15f, C.TEXT, 700))
+                val where = if (t.scope == "group") "👥 ${t.groupName.ifBlank { a.groups.firstOrNull { it.id == t.groupId }?.name ?: "그룹" }}" else "🔒 나만 보기"
+                tx.add(a.text("${Geo.agoShort(t.updated)} · $where", 12f, C.TEXT2))
+                tx.setOnClickListener { s.dismiss(); toiletDetail(a, t) }
+                row.add(tx, 1f)
+                row.add(a.text("그룹\n공지", 11f, C.TEXT3, 600, Gravity.CENTER))
+                val sw = com.google.android.material.materialswitch.MaterialSwitch(a).apply {
+                    isChecked = t.scope == "group"
+                    isEnabled = canGroup || t.scope == "group"
+                }
+                sw.setOnCheckedChangeListener { v, on ->
+                    fun apply(groupId: String) {
+                        val old = t.scope to t.groupId
+                        val item = t.copy()
+                        item.scope = if (on) "group" else "mine"
+                        item.groupId = if (on) groupId else ""
+                        item.groupName = a.groups.firstOrNull { it.id == groupId }?.name ?: ""
+                        a.lifecycleScope.launch {
+                            a.saveToilet(item, old.first, old.second, touch = false)
+                            a.toast(if (on) "${item.groupName} 그룹에 공유했어요" else "나만 보기로 바꿨어요")
+                            fill()
+                        }
+                    }
+                    if (!on) { apply(""); return@setOnCheckedChangeListener }
+                    if (a.groups.size == 1) { apply(a.groups[0].id); return@setOnCheckedChangeListener }
+                    // 그룹이 여러 개면 고르기
+                    var picked = false
+                    androidx.appcompat.app.AlertDialog.Builder(a)
+                        .setTitle("어느 그룹에 공유할까요?")
+                        .setItems(a.groups.map { it.name }.toTypedArray()) { _, i -> picked = true; apply(a.groups[i].id) }
+                        .setOnDismissListener { if (!picked) v.isChecked = false }
+                        .show()
+                }
+                row.add(sw)
+                box.add(row)
+            }
+        }
+        fill()
+        s.show()
+    }
+
     /** 가까운 순 목록: 내 화장실 + 그룹 화장실 + 공중화장실 (반경 2km) */
     fun list(a: MainActivity) {
         // 기준: 내 위치. 단, 검색 등으로 지도를 멀리(500m 넘게) 옮겼으면 지도 가운데
@@ -413,6 +476,7 @@ object Sheets {
         }
         s.add(acc)
 
+        s.add(a.btn("📁 나의 화장실") { s.dismiss(); myToilets(a) })
         s.add(a.btn("👥 그룹 관리") { Login.need(a, "그룹을 쓰려면") { s.dismiss(); groups(a) } })
 
         s.add(a.text("지도", 12f, C.TEXT2, 600))

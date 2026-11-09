@@ -743,10 +743,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** 저장 (범위가 바뀌면 예전 자리에서 지움) */
-    suspend fun saveToilet(t: Toilet, oldScope: String?, oldGroup: String?) {
+    /** touch=false 면 '최근 수정' 날짜를 바꾸지 않음 (공유 스위치만 바꿀 때) */
+    suspend fun saveToilet(t: Toilet, oldScope: String?, oldGroup: String?, touch: Boolean = true) {
         busy(true)
         try {
-            t.updated = System.currentTimeMillis()
+            if (touch) t.updated = System.currentTimeMillis()
             if (oldScope != null && (oldScope != t.scope || oldGroup != t.groupId)) {
                 if (oldScope == "group" && !oldGroup.isNullOrEmpty()) Cloud.deleteGroupToilet(oldGroup, t.id)
                 else if (Cloud.loggedIn) Cloud.deleteMine(t.id) else local.delete(t.id)
