@@ -668,18 +668,19 @@ object Sheets {
             if (mineV < 0) { a.toast("먼저 깨끗해요/보통/별로예요 중 하나를 눌러 주세요"); return }
             Login.need(a, "평가하려면") {
                 a.lifecycleScope.launch {
-                    try { Cloud.vote(p.id, mineV, chosen.toList()); a.toast("반영했어요") } catch (e: Exception) { a.toast("실패: ${e.message}") }
+                    try { Cloud.vote(p.id, mineV, chosen.toList()); a.toast("평가를 저장했어요") } catch (e: Exception) { a.toast("실패: ${e.message}") }
                 }
             }
         }
         box.add(a.text("내 평가", 12f, C.TEXT2, 600))
-        box.add(a.segmented(listOf("깨끗해요", "보통", "별로예요"), if (mineV < 0) -1 else mineV) { mineV = it; send() })
+        // 고르기만 하면 저장 안 됨 → '평가 저장'을 눌러야 서버에 올라감
+        box.add(a.segmented(listOf("깨끗해요", "보통", "별로예요"), if (mineV < 0) -1 else mineV) { mineV = it })
         for (tag in listOf("휴지 없음", "고장")) {
             box.add(a.toggleRow(tag, chosen.contains(tag)) { on ->
                 if (on) chosen.add(tag) else chosen.remove(tag)
-                send()
             })
         }
+        box.add(a.btn("평가 저장", C.BLUE, Color.WHITE) { send() })
     }
 
     private fun fillMemos(a: MainActivity, box: LinearLayout, p: PublicToilet, list: List<MemoItem>) {

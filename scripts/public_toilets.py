@@ -92,7 +92,10 @@ def parse(o):
     name = pick(o, [r"(?i)(rstrm|tlt|toilet).*nm", "화장실명"], [r"(?i)nm$", r"(?i)name", "명$"]) or "공중화장실"
     addr = pick(o, [r"(?i)road.*addr", "도로명"], [r"(?i)addr", "주소"])
     lotno = pick(o, [r"(?i)lotno.*addr", "지번"], [])
-    opn = pick(o, [r"(?i)(opn|open).*(hr|tm|time)", "개방시간"], [r"(?i)opn", "개방"])
+    # 개방 시간: OPN_HR(예: 상시, 09:00~18:00). 기관 코드(OPN_ATMY_GRP_CD) 같은 숫자는 빼기
+    opn = pick(o, [r"(?i)^opn_hr$", r"(?i)(opn|open).*(hr|tm|time)", "개방시간"], [], r"(?i)(atmy|grp|_cd$)")
+    if opn.isdigit():
+        opn = ""
     pid = pick(o, [r"(?i)mng.*no", "관리번호"], [r"(?i)^id$", r"(?i)_id$"]) or f"{name}_{addr or lotno}"
     flags = []
     if yes(o, r"(?i)(dspsn|disab|장애인)"): flags.append("장애인용")
