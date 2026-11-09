@@ -160,7 +160,7 @@ object Sheets {
         val me = a.myLat?.let { it to (a.myLon ?: 0.0) }
         val useMe = me != null && Geo.dist(me.first, me.second, mlat, mlon) <= 500
         val (clat, clon) = if (useMe) me!! else (mlat to mlon)
-        val s = Sheet(a, if (useMe) "가까운 화장실 (내 위치 기준)" else "가까운 화장실 (지도 가운데 기준)")
+        val s = Sheet(a, if (useMe) "가까운 화장실 (내 위치 기준)" else "가까운 화장실 (지도 가운데 기준)", half = true)
         val box = a.vbox(8)
         val loading = a.text("공중화장실 찾는 중…", 13f, C.TEXT3)
         s.add(box)

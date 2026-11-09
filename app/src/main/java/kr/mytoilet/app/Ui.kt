@@ -190,7 +190,8 @@ fun Context.segmented(options: List<String>, selected: Int, enabled: List<Boolea
 }
 
 /** 아래에서 올라오는 유리창(모달) */
-class Sheet(val activity: Activity, title: String?) {
+/** 아래에서 올라오는 창. half=true 면 화면 절반 높이로 고정하고 내용만 안에서 스크롤 */
+class Sheet(val activity: Activity, title: String?, half: Boolean = false) {
     val dialog = BottomSheetDialog(activity)
     val body: LinearLayout = activity.vbox(12)
 
@@ -215,17 +216,39 @@ class Sheet(val activity: Activity, title: String?) {
             root.addView(head, lp())
             root.addView(View(a), lp(h = a.dp(10)))
         }
-        root.addView(body, lp())
-        val scroll = ScrollView(a).apply {
-            isFillViewport = true
-            addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        }
-        dialog.setContentView(scroll)
-        dialog.setOnShowListener {
-            val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-            bs?.setBackgroundColor(Color.TRANSPARENT)
-            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
-            dialog.behavior.skipCollapsed = true
+        if (half) {
+            // 제목은 고정, 목록만 안에서 스크롤
+            val h = (a.resources.displayMetrics.heightPixels * 0.5f).toInt()
+            root.setPadding(a.dp(18), a.dp(10), a.dp(18), 0)
+            val inner = androidx.core.widget.NestedScrollView(a).apply {
+                isVerticalScrollBarEnabled = true
+                addView(body, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                setPadding(0, 0, 0, a.dp(24))
+                clipToPadding = false
+            }
+            root.addView(inner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            dialog.setContentView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))
+            dialog.setOnShowListener {
+                val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+                bs?.setBackgroundColor(Color.TRANSPARENT)
+                bs?.layoutParams?.height = h
+                dialog.behavior.peekHeight = h
+                dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+                dialog.behavior.skipCollapsed = true
+            }
+        } else {
+            root.addView(body, lp())
+            val scroll = ScrollView(a).apply {
+                isFillViewport = true
+                addView(root, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            dialog.setContentView(scroll)
+            dialog.setOnShowListener {
+                val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+                bs?.setBackgroundColor(Color.TRANSPARENT)
+                dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+                dialog.behavior.skipCollapsed = true
+            }
         }
     }
 
