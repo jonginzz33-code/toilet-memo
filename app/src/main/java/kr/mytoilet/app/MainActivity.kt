@@ -448,7 +448,7 @@ class MainActivity : AppCompatActivity() {
         }
         for (t in groupToilets) {
             if (Geo.dist(clat, clon, t.lat, t.lon) > limit) continue
-            addLabel("g_${t.groupId}_${t.id}", t.lat, t.lon, C.GREEN, "그룹 · ${Geo.agoShort(t.updated)}", false, 0, t); shown++
+            addLabel("g_${t.groupId}_${t.id}", t.lat, t.lon, C.PURPLE, "그룹 · ${Geo.agoShort(t.updated)}", false, 0, t); shown++
         }
         for (t in mine) {
             if (Geo.dist(clat, clon, t.lat, t.lon) > limit) continue

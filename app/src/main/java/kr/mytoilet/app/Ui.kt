@@ -22,6 +22,11 @@ import com.google.android.material.materialswitch.MaterialSwitch
 object C {
     const val BLUE = 0xFF378ADD.toInt()
     const val ORANGE = 0xFFF27A1A.toInt()
+    const val ORANGE_BG = 0xFFFDEBDC.toInt()
+    const val ORANGE_TEXT = 0xFFB4540A.toInt()
+    const val PURPLE = 0xFF7F56D9.toInt()   // 그룹 화장실 표시
+    const val PURPLE_BG = 0xFFEFE9FB.toInt()
+    const val PURPLE_TEXT = 0xFF5B3BB0.toInt()
     const val CAR = 0xFF2C2C2A.toInt()     // 차량 길찾기   // 나만 보기 화장실 표시
     const val BLUE_DARK = 0xFF185FA5.toInt()
     const val BLUE_TEXT = 0xFF0C447C.toInt()

@@ -13,8 +13,8 @@ import kotlinx.coroutines.tasks.await
 object Sheets {
 
     private fun scopeChip(a: MainActivity, t: Toilet): TextView =
-        if (t.scope == "group") a.chip("그룹 · ${t.groupName}", C.GREEN_BG, C.GREEN_TEXT)
-        else a.chip("나만 보기", C.BLUE_BG, C.BLUE_TEXT)
+        if (t.scope == "group") a.chip("그룹 · ${t.groupName}", C.PURPLE_BG, C.PURPLE_TEXT)
+        else a.chip("나만 보기", C.ORANGE_BG, C.ORANGE_TEXT)
 
     private fun distText(a: MainActivity, lat: Double, lon: Double): String {
         val la = a.myLat ?: return ""
