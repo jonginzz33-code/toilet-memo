@@ -11,7 +11,7 @@ import java.net.URL
 object PublicApi {
     // TODO: 플레이스토어 올리기 전에 GitHub 비밀값(TOILET_API_KEY)으로 옮기기
     const val KEY = "fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da"
-    const val DEFAULT_URL = "https://apis.data.go.kr/1741000/public_restroom_info_v2/info"
+    const val DEFAULT_URL = "https://apis.data.go.kr/1741000/public_restroom_info_v2/info_v2"
 
     suspend fun fetchRaw(baseUrl: String, page: Int, rows: Int): String = withContext(Dispatchers.IO) {
         val sep = if (baseUrl.contains("?")) "&" else "?"

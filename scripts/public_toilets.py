@@ -3,7 +3,7 @@
 import gzip, json, re, sys, time, urllib.request
 
 KEY = "fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da"
-URL = "https://apis.data.go.kr/1741000/public_restroom_info_v2/info"
+URL = "https://apis.data.go.kr/1741000/public_restroom_info_v2/info_v2"
 ROWS = 1000
 
 
@@ -113,7 +113,7 @@ def main(out):
             total = find_total(data) or -1
         rows = find_items(data)
         if page == 1:
-            print("total", total, "first item keys:", list(rows[0].keys()) if rows else raw[:300])
+            print("total", total, "first item:", json.dumps(rows[0], ensure_ascii=False)[:800] if rows else raw[:300])
         if not rows:
             break
         for r in rows:
