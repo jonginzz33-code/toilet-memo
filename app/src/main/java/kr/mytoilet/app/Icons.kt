@@ -137,17 +137,17 @@ object Icons {
     /** 제휴 가게 핀: 초록 물방울 + 가운데 가게 사진(없으면 🤝) + 노란 ★ + 아래 이름표. 반환: (그림, 핀 끝 y 비율) */
     fun partnerPin(ctx: Context, photo: Bitmap?, label: String, scale: Float = 1f): Pair<Bitmap, Float> {
         val d = ctx.resources.displayMetrics.density * scale
-        val r = 26 * d
+        val r = 17 * d                          // 핀 머리 반지름 (화장실 표시와 비슷한 크기)
         val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 12.5f * d; typeface = Fonts.bold; textAlign = Paint.Align.CENTER; color = 0xFF0F6E56.toInt()
+            textSize = 11 * d; typeface = Fonts.bold; textAlign = Paint.Align.CENTER; color = 0xFF0F6E56.toInt()
         }
-        val labelW = tp.measureText(label) + 16 * d
-        val labelH = 22 * d
-        val w = max(labelW, r * 2 + 30 * d) + 4 * d
+        val labelW = tp.measureText(label) + 14 * d
+        val labelH = 19 * d
+        val w = max(labelW, r * 2 + 20 * d) + 4 * d
         val cx = w / 2
-        val headY = 12 * d + r
-        val tipY = headY + r * 2.0f
-        val h = tipY + 6 * d + labelH + 2 * d
+        val headY = 8 * d + r
+        val tipY = headY + r * 1.8f
+        val h = tipY + 4 * d + labelH + 2 * d
         val bmp = Bitmap.createBitmap(w.toInt(), h.toInt(), Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val green = 0xFF1D9E75.toInt()
@@ -160,33 +160,33 @@ object Icons {
             close()
         }
         c.drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = green })
-        c.drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.5f * d; color = Color.WHITE })
+        c.drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2f * d; color = Color.WHITE })
 
         // 가운데 동그란 사진
-        val ir = r * 0.76f
-        c.drawCircle(cx, headY, ir + 2 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+        val ir = r * 0.78f
+        c.drawCircle(cx, headY, ir + 1.5f * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
         if (photo != null) {
             c.save()
             c.clipPath(Path().apply { addCircle(cx, headY, ir, Path.Direction.CW) })
             c.drawBitmap(photo, null, RectF(cx - ir, headY - ir, cx + ir, headY + ir), Paint(Paint.FILTER_BITMAP_FLAG))
             c.restore()
         } else {
-            val ep = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 22 * d; textAlign = Paint.Align.CENTER }
+            val ep = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 15 * d; textAlign = Paint.Align.CENTER }
             val fm = ep.fontMetrics
             c.drawText("🤝", cx, headY - (fm.ascent + fm.descent) / 2, ep)
         }
 
         // ★ 표시
-        val sx = cx + r * 0.8f
-        val sy = headY - r * 0.8f
-        c.drawCircle(sx, sy, 10 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFF5B400.toInt() })
-        c.drawCircle(sx, sy, 10 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2 * d; color = Color.WHITE })
-        val st = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 12 * d; textAlign = Paint.Align.CENTER; color = Color.WHITE; typeface = Fonts.bold }
+        val sx = cx + r * 0.85f
+        val sy = headY - r * 0.85f
+        c.drawCircle(sx, sy, 7 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFF5B400.toInt() })
+        c.drawCircle(sx, sy, 7 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.5f * d; color = Color.WHITE })
+        val st = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 9 * d; textAlign = Paint.Align.CENTER; color = Color.WHITE; typeface = Fonts.bold }
         val sfm = st.fontMetrics
         c.drawText("★", sx, sy - (sfm.ascent + sfm.descent) / 2, st)
 
         // 이름표
-        val lb = RectF(cx - labelW / 2, tipY + 6 * d, cx + labelW / 2, tipY + 6 * d + labelH)
+        val lb = RectF(cx - labelW / 2, tipY + 4 * d, cx + labelW / 2, tipY + 4 * d + labelH)
         c.drawRoundRect(lb, 7 * d, 7 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF5FFFFFF.toInt() })
         c.drawRoundRect(lb, 7 * d, 7 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1.8f * d; color = green })
         val lm = tp.fontMetrics
