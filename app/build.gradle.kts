@@ -27,6 +27,8 @@ android {
         val kakaoKey = (project.findProperty("kakaoKey") as String?)?.trim().orEmpty()
             .ifBlank { System.getenv("KAKAO_KEY")?.trim().orEmpty() }
         buildConfigField("String", "KAKAO_KEY", "\"$kakaoKey\"")
+        // 카카오 REST 키 (건물 이름 추천용): GitHub 비밀값 KAKAO_REST_KEY
+        buildConfigField("String", "KAKAO_REST_KEY", "\"${System.getenv("KAKAO_REST_KEY")?.trim() ?: ""}\"")
         buildConfigField("String", "GITHUB_REPO", "\"jonginzz33-code/toilet-memo\"")
     }
 

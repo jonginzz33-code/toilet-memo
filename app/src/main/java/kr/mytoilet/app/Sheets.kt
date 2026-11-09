@@ -73,7 +73,35 @@ object Sheets {
         val (b3, place) = a.field("화장실 위치 설명", "엘리베이터 내려서 오른쪽 끝, 남자화장실", t?.place ?: "")
         val (b4, pw) = a.field("비밀번호", "1234*", t?.pw ?: "")
         val (b5, memo) = a.field("메모", "휴지 없음, 밤 10시 이후 잠김 등", t?.memo ?: "", multi = true)
-        listOf(b1, b2, b3, b4, b5).forEach { s.add(it) }
+        s.add(b1)
+        // 새로 추가할 때: 카카오 지도로 그 자리 건물·가게 이름을 찾아 추천 (누르면 건물 이름에 들어감)
+        if (t == null) {
+            val hint = a.text("📍 이 자리 건물 찾는 중…", 12f, C.TEXT3)
+            val chips = a.hbox(6)
+            val scroll = android.widget.HorizontalScrollView(a).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(chips)
+            }
+            s.add(hint)
+            s.add(scroll)
+            a.lifecycleScope.launch {
+                val g = try { KakaoLocal.guess(lat, lon) } catch (_: Exception) { null }
+                if (g == null || (g.names.isEmpty() && g.address.isBlank())) {
+                    hint.visibility = android.view.View.GONE; scroll.visibility = android.view.View.GONE
+                    return@launch
+                }
+                hint.text = if (g.address.isNotBlank()) "📍 ${g.address}" else "📍 추천 이름"
+                for (n in g.names) {
+                    chips.add(a.chip(n, C.BLUE_BG, C.BLUE_TEXT).apply {
+                        setPadding(a.dp(12), a.dp(7), a.dp(12), a.dp(7))
+                        setOnClickListener { building.setText(n); building.setSelection(n.length) }
+                    })
+                }
+                // 건물 이름이 비어 있으면 첫 번째 추천을 미리 넣어 둠
+                if (building.text.isBlank() && g.names.isNotEmpty()) building.setText(g.names[0])
+            }
+        }
+        listOf(b2, b3, b4, b5).forEach { s.add(it) }
 
         var scope = t?.scope ?: "mine"
         var groupId = t?.groupId ?: ""
