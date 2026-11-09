@@ -145,12 +145,12 @@ class MainActivity : AppCompatActivity() {
         circle = CircleOverlay(this).apply { show = prefs.circleOnly }
         root.addView(circle, FrameLayout.LayoutParams(-1, -1))
 
-        val pinBmp = Icons.toilet(this, C.RED, "새 화장실")
+        // 핀 끝이 화면 정가운데(= 저장될 자리)에 오도록 위로 올림
+        val (pinBmp, tipY) = Icons.placePin(this)
         centerPin = ImageView(this).apply {
             setImageBitmap(pinBmp)
             visibility = View.GONE
-            val ay = Icons.toiletAnchorY(this@MainActivity, 0)
-            translationY = pinBmp.height / 2f - pinBmp.height * ay
+            translationY = pinBmp.height / 2f - tipY
         }
         root.addView(centerPin, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
 

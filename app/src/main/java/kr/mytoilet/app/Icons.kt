@@ -87,6 +87,53 @@ object Icons {
         return bmp
     }
 
+    /** 화장실 추가·옮기기 때 화면 가운데 큰 빨간 핀. 핀 끝이 정확한 자리. 반환: (그림, 핀 끝의 y 위치) */
+    fun placePin(ctx: Context): Pair<Bitmap, Float> {
+        val d = ctx.resources.displayMetrics.density
+        val label = "여기에 화장실"
+        val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 13 * d; typeface = Fonts.bold; textAlign = Paint.Align.CENTER; color = Color.WHITE
+        }
+        val labelW = tp.measureText(label) + 20 * d
+        val labelH = 26 * d
+        val r = 22 * d                       // 핀 머리 반지름
+        val w = max(labelW, r * 2 + 8 * d) + 4 * d
+        val headY = labelH + 10 * d + r
+        val tipY = headY + r * 2.1f
+        val h = tipY + 8 * d
+        val bmp = Bitmap.createBitmap(w.toInt(), h.toInt(), Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val cx = w / 2
+
+        // 말풍선
+        val lb = RectF(cx - labelW / 2, 0f, cx + labelW / 2, labelH)
+        c.drawRoundRect(lb, 13 * d, 13 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF222222.toInt() })
+        val tri = Path().apply { moveTo(cx - 6 * d, labelH - 1); lineTo(cx + 6 * d, labelH - 1); lineTo(cx, labelH + 6 * d); close() }
+        c.drawPath(tri, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF222222.toInt() })
+        val fm = tp.fontMetrics
+        c.drawText(label, cx, labelH / 2 - (fm.ascent + fm.descent) / 2, tp)
+
+        // 바닥 그림자 (핀 끝 자리)
+        c.drawOval(RectF(cx - 9 * d, tipY - 3 * d, cx + 9 * d, tipY + 3 * d), Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x55000000 })
+
+        // 핀 (물방울 모양)
+        val pin = Path().apply {
+            moveTo(cx, tipY)
+            cubicTo(cx - r * 0.35f, headY + r * 1.35f, cx - r, headY + r * 0.75f, cx - r, headY)
+            arcTo(RectF(cx - r, headY - r, cx + r, headY + r), 180f, 180f)
+            cubicTo(cx + r, headY + r * 0.75f, cx + r * 0.35f, headY + r * 1.35f, cx, tipY)
+            close()
+        }
+        c.drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = C.RED })
+        c.drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.5f * d; color = Color.WHITE })
+        // 머리 안 하얀 원 + 남녀 그림
+        c.drawCircle(cx, headY, r * 0.72f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+        c.save(); c.scale(0.62f, 0.62f, cx, headY)
+        drawPeople(c, RectF(cx - 22 * d, headY - 17 * d, cx + 22 * d, headY + 17 * d), C.RED, d)
+        c.restore()
+        return bmp to tipY
+    }
+
     /** 기준점(그림 가운데)의 세로 위치 비율 */
     fun toiletAnchorY(ctx: Context, unavailable: Int): Float {
         val d = ctx.resources.displayMetrics.density
