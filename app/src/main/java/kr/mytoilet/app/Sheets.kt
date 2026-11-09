@@ -177,7 +177,7 @@ object Sheets {
                 }
                 val tx = a.vbox(2)
                 tx.add(a.text(t.title(), 15f, C.TEXT, 700))
-                val where = if (t.scope == "group") "👥 ${t.groupName.ifBlank { a.groups.firstOrNull { it.id == t.groupId }?.name ?: "그룹" }}" else "🔒 나만 보기"
+                val where = if (t.scope == "group") "👥 '${t.groupName.ifBlank { a.groups.firstOrNull { it.id == t.groupId }?.name ?: "그룹" }}' 그룹에 공유 중" else "🔒 나만 보기"
                 tx.add(a.text("${Geo.agoShort(t.updated)} · $where", 12f, C.TEXT2))
                 tx.setOnClickListener { s.dismiss(); toiletDetail(a, t) }
                 row.add(tx, 1f)
