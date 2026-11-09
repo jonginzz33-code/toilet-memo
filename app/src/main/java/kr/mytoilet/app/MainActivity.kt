@@ -115,7 +115,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     suspend fun reloadPartners() {
-        partners = try { Partners.all() } catch (_: Exception) { partners }
+        partners = try { Partners.all() } catch (e: Exception) { if (isAdmin) toast("제휴 업체를 못 불러왔어요: ${e.message}"); partners }
         drawToilets()
     }
 

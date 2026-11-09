@@ -961,8 +961,10 @@ object Sheets {
     }
 
     private suspend fun fillAdmin(a: MainActivity, box: LinearLayout) {
-        // 제휴 가게
-        box.add(a.text("🤝 제휴 가게 (${a.partners.size}곳)", 12f, C.TEXT2, 600))
+        // 제휴 가게: 열 때마다 서버에서 새로 불러옴
+        a.reloadPartners()
+        box.add(a.text("🤝 제휴 업체 목록 (${a.partners.size}곳)", 16f, C.TEXT, 800))
+        if (a.partners.isEmpty()) box.add(a.text("아직 등록한 제휴 업체가 없어요.", 13f, C.TEXT3))
         box.add(a.btn("＋ 제휴 가게 등록", C.GREEN, Color.WHITE) {
             a.closeSheets()   // 창 닫고 지도에서 자리 정하기
             a.startPartnerPlacing(Partner())
@@ -972,8 +974,12 @@ object Sheets {
                 background = a.round(0xFFFFFFFF.toInt(), 12f)
                 setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10))
             }
-            r.add(a.text(p.name, 14f, C.TEXT, 700), 1f)
-            r.add(a.text("📊 통계", 13f, C.GREEN_TEXT, 700).apply { setOnClickListener { partnerStats(a, p) } })
+            r.addView(photoView(a, p.bitmap(), 40))
+            val tx = a.vbox(2)
+            tx.add(a.text(p.name, 15f, C.TEXT, 700))
+            tx.add(a.text(p.addr.ifBlank { "위치 정해짐" } + if (p.coupon) " · 🎁 쿠폰" else "", 12f, C.TEXT3))
+            r.add(tx, 1f)
+            r.add(a.text("📊 통계", 13f, C.GREEN_TEXT, 700).apply { setPadding(a.dp(8), a.dp(6), a.dp(4), a.dp(6)); setOnClickListener { partnerStats(a, p) } })
             r.setOnClickListener { a.closeSheets(); partnerDetail(a, p) }
             box.add(r)
         }
