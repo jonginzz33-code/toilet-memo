@@ -7,7 +7,7 @@ on:
     paths-ignore:
       - firestore.rules
       - firebase.json
-      - docs/**
+      - docs/mockups/**
       - scripts/**
       - CLAUDE.md
       - .github/workflows/firestore-rules.yml

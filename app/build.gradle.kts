@@ -81,6 +81,9 @@ android {
 
     buildFeatures { buildConfig = true }
 
+    // 개인정보처리방침 페이지(docs/legal)를 앱 안에도 넣음 (앱에서 메뉴 없이 내용만 보기)
+    sourceSets["main"].assets.srcDir(rootProject.file("docs/legal"))
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

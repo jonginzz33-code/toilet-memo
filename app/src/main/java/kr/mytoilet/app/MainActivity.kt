@@ -756,6 +756,23 @@ class MainActivity : AppCompatActivity() {
         if (!placing) { addBtn.visibility = View.VISIBLE; urgentBtn.visibility = View.VISIBLE }
     }
 
+    /** 개인정보처리방침: 앱 안에 넣어 둔 페이지를 내용만 보여 줌 */
+    fun showPrivacy() {
+        val d = android.app.Dialog(this, android.R.style.Theme_Material_Light_NoActionBar)
+        val box = vbox(0)
+        val head = hbox(8).apply { setPadding(dp(16), dp(12), dp(8), dp(8)) }
+        head.add(text("개인정보처리방침", 18f, C.TEXT, 800), 1f)
+        head.add(text("✕", 20f, C.TEXT2).apply { setPadding(dp(10), dp(4), dp(10), dp(4)); setOnClickListener { d.dismiss() } })
+        box.add(head)
+        val web = android.webkit.WebView(this).apply {
+            settings.javaScriptEnabled = false
+            loadUrl("file:///android_asset/privacy.html")
+        }
+        box.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
+        d.setContentView(box)
+        d.show()
+    }
+
     // ---------------- 장소 검색 ----------------
 
     /** 주소·장소 이름으로 찾아서 지도를 그 자리로 옮김 (폰 내장 검색, 키 필요 없음) */

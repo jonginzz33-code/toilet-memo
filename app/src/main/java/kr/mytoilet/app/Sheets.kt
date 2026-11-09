@@ -809,7 +809,7 @@ object Sheets {
         s.add(a.btn("업데이트 확인 · 지금 v${BuildConfig.VERSION_NAME}") { a.checkUpdate(silent = false) })
         if (a.isAdmin || Cloud.loggedIn) s.add(a.btn("🛠 관리자 페이지") { s.dismiss(); admin(a) })
         s.add(a.btn("개인정보처리방침") {
-            a.open("https://github.com/${BuildConfig.GITHUB_REPO}/blob/main/docs/privacy.md")
+            a.showPrivacy()
         })
         if (Cloud.loggedIn) {
             val row = a.hbox(8)
