@@ -1,6 +1,7 @@
 """공공데이터포털 공중화장실 API를 받아 앱용 파일(public-toilets.json.gz)로 만든다.
 앱의 PublicApi.parse 와 같은 규칙으로 항목을 고른다."""
-import gzip, json, re, sys, time, urllib.request
+import gzip, json, os, re, sys, time, urllib.parse, urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 KEY = "fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da"
 URL = "https://apis.data.go.kr/1741000/public_restroom_info_v2/info_v2"
@@ -86,19 +87,104 @@ def num(x):
 def parse(o):
     lat = num(pick(o, [r"(?i)wgs84.*lat", "위도"], [r"(?i)lat"]))
     lon = num(pick(o, [r"(?i)wgs84.*(lot|lon|lng)", "경도"], [r"(?i)(lot|lon|lng)"], r"(?i)lotno|lotn"))
-    if lat is None or lon is None or not (32 <= lat <= 39.5) or not (124 <= lon <= 132):
-        return None
+    if lat is not None and lon is not None and not (32 <= lat <= 39.5 and 124 <= lon <= 132):
+        lat = lon = None
     name = pick(o, [r"(?i)(rstrm|tlt|toilet).*nm", "화장실명"], [r"(?i)nm$", r"(?i)name", "명$"]) or "공중화장실"
     addr = pick(o, [r"(?i)road.*addr", "도로명"], [r"(?i)addr", "주소"])
+    lotno = pick(o, [r"(?i)lotno.*addr", "지번"], [])
     opn = pick(o, [r"(?i)(opn|open).*(hr|tm|time)", "개방시간"], [r"(?i)opn", "개방"])
-    pid = pick(o, [r"(?i)mng.*no", "관리번호"], [r"(?i)^id$", r"(?i)_id$"]) or f"{name}_{lat:.5f}_{lon:.5f}"
+    pid = pick(o, [r"(?i)mng.*no", "관리번호"], [r"(?i)^id$", r"(?i)_id$"]) or f"{name}_{addr or lotno}"
     flags = []
     if yes(o, r"(?i)(dspsn|disab|장애인)"): flags.append("장애인용")
     if yes(o, r"(?i)(diaper|기저귀)"): flags.append("기저귀 교환대")
     if yes(o, r"(?i)(emg|emrg|bell|비상벨)"): flags.append("비상벨")
     if yes(o, r"(?i)(cctv)"): flags.append("CCTV")
-    return {"id": pid.replace("/", "_"), "name": name, "addr": addr,
-            "lat": round(lat, 6), "lon": round(lon, 6), "open": opn, "flags": flags}
+    return {"id": pid.replace("/", "_"), "name": name, "addr": addr or lotno, "lotno": lotno,
+            "lat": None if lat is None else round(lat, 6), "lon": None if lon is None else round(lon, 6),
+            "open": opn, "flags": flags}
+
+
+# ---------- 주소 → 좌표 (카카오 로컬 API, 지난번 결과는 다시 묻지 않음) ----------
+
+PREV_URL = "https://github.com/jonginzz33-code/toilet-memo/releases/download/public-data/public-toilets.json.gz"
+
+
+def load_prev_cache():
+    """지난번 파일에서 주소 → 좌표 꺼내기"""
+    cache = {}
+    try:
+        with urllib.request.urlopen(PREV_URL, timeout=60) as r:
+            d = json.loads(gzip.decompress(r.read()).decode("utf-8"))
+        for it in d.get("items", []):
+            for a in (it.get("addr"), it.get("lotno")):
+                if a:
+                    cache[a] = (it["lat"], it["lon"])
+        for a, ll in d.get("miss", {}).items():
+            cache[a] = None
+    except Exception as e:
+        print("no previous file:", e)
+    return cache
+
+
+def clean(a):
+    a = re.sub(r"\(.*?\)", " ", a or "")
+    return re.sub(r"\s+", " ", a).strip()
+
+
+def kakao(query, key):
+    u = "https://dapi.kakao.com/v2/local/search/address.json?" + urllib.parse.urlencode({"query": query, "size": 1})
+    req = urllib.request.Request(u, headers={"Authorization": "KakaoAK " + key})
+    for i in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                docs = json.loads(r.read().decode("utf-8")).get("documents", [])
+            if docs:
+                return round(float(docs[0]["y"]), 6), round(float(docs[0]["x"]), 6)
+            return None
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise SystemExit(f"카카오 키 오류 HTTP {e.code}: {e.read()[:200]!r}")
+            time.sleep(2 * (i + 1))
+        except Exception:
+            time.sleep(2 * (i + 1))
+    return None
+
+
+def geocode(items):
+    key = os.environ.get("KAKAO_REST_KEY", "").strip()
+    need = [it for it in items if it["lat"] is None]
+    if not need:
+        return {}
+    cache = load_prev_cache()
+    todo = sorted({a for it in need for a in (clean(it["addr"]), clean(it["lotno"])) if a and a not in cache})
+    print("geocode: need", len(need), "cached", len(cache), "to ask", len(todo))
+    if todo and not key:
+        print("KAKAO_REST_KEY 없음 → 캐시에 있는 것만 씀")
+        todo = []
+    done = [0]
+
+    def one(a):
+        r = kakao(a, key)
+        done[0] += 1
+        if done[0] % 2000 == 0:
+            print("geocoded", done[0], "/", len(todo))
+        return a, r
+
+    with ThreadPoolExecutor(8) as ex:
+        for a, r in ex.map(one, todo):
+            cache[a] = r
+    miss = {}
+    for it in need:
+        for a in (clean(it["addr"]), clean(it["lotno"])):
+            ll = cache.get(a)
+            if ll:
+                it["lat"], it["lon"] = ll
+                break
+        else:
+            a = clean(it["addr"]) or clean(it["lotno"])
+            if a:
+                miss[a] = None
+    return miss
 
 
 def main(out):
@@ -124,9 +210,12 @@ def main(out):
         if len(rows) < ROWS or (0 < total <= page * ROWS):
             break
         page += 1
+    miss = geocode(items)
+    items = [it for it in items if it["lat"] is not None]
+    print("with coords", len(items), "missing", len(miss))
     if len(items) < 1000:
         raise SystemExit(f"너무 적어요 ({len(items)}개). 저장 안 함")
-    body = json.dumps({"updated": time.strftime("%Y-%m-%d"), "items": items}, ensure_ascii=False, separators=(",", ":"))
+    body = json.dumps({"updated": time.strftime("%Y-%m-%d"), "items": items, "miss": miss}, ensure_ascii=False, separators=(",", ":"))
     with gzip.open(out, "wt", encoding="utf-8") as f:
         f.write(body)
     print("saved", len(items))

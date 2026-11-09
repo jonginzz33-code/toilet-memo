@@ -20,6 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Fetch
+        env:
+          KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
         run: python3 scripts/public_toilets.py public-toilets.json.gz
       - name: Upload
         env:
