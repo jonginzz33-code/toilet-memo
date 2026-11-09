@@ -10,13 +10,13 @@ ROWS = 1000
 
 def fetch(page):
     u = f"{URL}?serviceKey={KEY}&pageNo={page}&numOfRows={ROWS}&type=json&returnType=json&_type=json"
-    for i in range(4):
+    for i in range(8):
         try:
-            with urllib.request.urlopen(u, timeout=90) as r:
+            with urllib.request.urlopen(u, timeout=40) as r:
                 return r.read().decode("utf-8")
         except Exception as e:
-            print("retry", page, e, file=sys.stderr)
-            time.sleep(3 * (i + 1))
+            print("retry", page, e, flush=True)
+            time.sleep(2 + i * 2)
     raise SystemExit(f"page {page} failed")
 
 
@@ -156,23 +156,29 @@ def geocode(items):
     if not need:
         return {}
     cache = load_prev_cache()
-    todo = sorted({a for it in need for a in (clean(it["addr"]), clean(it["lotno"])) if a and a not in cache})
-    print("geocode: need", len(need), "cached", len(cache), "to ask", len(todo))
-    if todo and not key:
+    if not key:
         print("KAKAO_REST_KEY 없음 → 캐시에 있는 것만 씀")
-        todo = []
     done = [0]
 
     def one(a):
         r = kakao(a, key)
         done[0] += 1
-        if done[0] % 2000 == 0:
-            print("geocoded", done[0], "/", len(todo))
+        if done[0] % 5000 == 0:
+            print("geocoded", done[0], flush=True)
         return a, r
 
-    with ThreadPoolExecutor(8) as ex:
-        for a, r in ex.map(one, todo):
-            cache[a] = r
+    # 1차: 대표 주소(도로명, 없으면 지번), 2차: 1차에서 못 찾은 것만 지번 주소
+    for rnd in (1, 2):
+        if rnd == 1:
+            todo = {clean(it["addr"]) for it in need}
+        else:
+            todo = {clean(it["lotno"]) for it in need if not cache.get(clean(it["addr"]))}
+        todo = sorted(a for a in todo if a and a not in cache) if key else []
+        print(f"geocode round {rnd}: need {len(need)} cached {len(cache)} to ask {len(todo)}", flush=True)
+        done[0] = 0
+        with ThreadPoolExecutor(16) as ex:
+            for a, r in ex.map(one, todo):
+                cache[a] = r
     miss = {}
     for it in need:
         for a in (clean(it["addr"]), clean(it["lotno"])):
@@ -206,7 +212,7 @@ def main(out):
             p = parse(r)
             if p and p["id"] not in seen:
                 seen.add(p["id"]); items.append(p)
-        print("page", page, "items", len(items))
+        print("page", page, "items", len(items), flush=True)
         if len(rows) < ROWS or (0 < total <= page * ROWS):
             break
         page += 1
@@ -223,4 +229,3 @@ def main(out):
 
 if __name__ == "__main__":
     main(sys.argv[1] if len(sys.argv) > 1 else "public-toilets.json.gz")
-# 2026-11-09
