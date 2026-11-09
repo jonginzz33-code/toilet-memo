@@ -1,19 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 아이콘: 하늘색 바탕 + 하얀 집 + 남(파랑)·여(분홍) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#378ADD"
-        android:pathData="M20,4 H88 A16,16 0 0 1 104,20 V88 A16,16 0 0 1 88,104 H20 A16,16 0 0 1 4,88 V20 A16,16 0 0 1 20,4 Z" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M36,22 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M27,34 H45 V62 H40 V86 H32 V62 H27 Z" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M53,20 H55 V88 H53 Z" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M72,22 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0" />
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M65,34 H79 L86,66 H78 V86 H66 V66 H58 Z" />
+    <!-- 바탕 -->
+    <path android:fillColor="#8DBDF0"
+        android:pathData="M24,4 H84 A20,20 0 0 1 104,24 V84 A20,20 0 0 1 84,104 H24 A20,20 0 0 1 4,84 V24 A20,20 0 0 1 24,4 Z" />
+    <!-- 집 -->
+    <path android:fillColor="#FBF8FB"
+        android:pathData="M54,17 L90,47 Q92.5,49 89.5,50.5 L84,50.5 V84 Q84,89 79,89 H29 Q24,89 24,84 V50.5 L18.5,50.5 Q15.5,49 18,47 Z" />
+    <!-- 가운데 줄 -->
+    <path android:fillColor="#B7C4D6"
+        android:pathData="M53.2,46 H54.8 V82 H53.2 Z" />
+    <!-- 남자 -->
+    <path android:fillColor="#5C9BE0"
+        android:pathData="M42,47 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0" />
+    <path android:fillColor="#5C9BE0"
+        android:pathData="M36.5,54.5 Q36.5,53 38,53 H46 Q47.5,53 47.5,54.5 V67 H44.6 V80 H42.8 V67 H41.2 V80 H39.4 V67 H36.5 Z" />
+    <!-- 여자 -->
+    <path android:fillColor="#F08FB4"
+        android:pathData="M66,47 m-4.6,0 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0" />
+    <path android:fillColor="#F08FB4"
+        android:pathData="M62.6,53 H69.4 L74,69 H69.6 V80 H67.6 V69 H64.4 V80 H62.4 V69 H58 Z" />
 </vector>
