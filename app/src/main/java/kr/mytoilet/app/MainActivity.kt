@@ -57,6 +57,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var unavailChip: TextView
     private lateinit var addBtn: TextView
     private lateinit var placeBar: LinearLayout
+    private lateinit var routeBar: LinearLayout
+    private lateinit var routeInfo: TextView
+    private var routeLine: com.kakao.vectormap.route.RouteLine? = null
+    private var routeTarget: Triple<Double, Double, String>? = null
     private lateinit var hint: TextView
     private lateinit var followBtn: TextView
     private lateinit var loading: LinearProgressIndicator
@@ -225,6 +229,24 @@ class MainActivity : AppCompatActivity() {
         placeBar.add(btn("취소", C.GLASS) { exitPlacing() }, 1f)
         placeBar.add(btn("이 위치로 정하기", C.RED, Color.WHITE) { confirmPlace() }, 2f)
         bottom.add(placeBar)
+        // 길 보기 중일 때 아래 막대
+        routeBar = vbox(8).apply { visibility = View.GONE }
+        routeInfo = text("", 14f, C.TEXT, 700, Gravity.CENTER).apply {
+            background = glass(14f)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        routeBar.add(routeInfo)
+        val rb = hbox(8)
+        rb.add(btn("✕ 길 지우기", C.GLASS) { clearRoute() }, 1f)
+        rb.add(btn("카카오맵으로 안내", C.BLUE, Color.WHITE) {
+            routeTarget?.let { (la, lo, n) ->
+                val app = Uri.parse("kakaomap://route?sp=${myLat},${myLon}&ep=$la,$lo&by=FOOT")
+                try { startActivity(Intent(Intent.ACTION_VIEW, app)) }
+                catch (_: Exception) { open("https://map.kakao.com/link/to/${Uri.encode(n)},$la,$lo") }
+            }
+        }, 1f)
+        routeBar.add(rb)
+        bottom.add(routeBar)
         root.addView(bottom, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
 
         setContentView(root)
@@ -527,6 +549,53 @@ class MainActivity : AppCompatActivity() {
         followBtn.setTextColor(if (on) Color.WHITE else C.TEXT)
         if (on) { goToMe(); hint.text = "내 위치를 따라가는 중 · 지도를 밀면 꺼져요" }
         else if (!placing) hint.text = "두 손가락으로 확대·축소"
+    }
+
+    // ---------------- 길 보기 ----------------
+
+    /** 내 위치 → 화장실까지 걷는 길을 지도에 파란 선으로 (길을 못 찾으면 곧은 점선) */
+    fun showRoute(lat: Double, lon: Double, name: String) {
+        val m = map ?: return
+        val sLat = myLat
+        val sLon = myLon
+        if (sLat == null || sLon == null) { goToMe(); return }
+        clearRoute()
+        routeTarget = Triple(lat, lon, name)
+        setFollow(false)
+        lifecycleScope.launch {
+            busy(true)
+            val r = try { Walk.route(sLat, sLon, lat, lon) } catch (_: Exception) { null } finally { busy(false) }
+            val pts = r?.points ?: listOf(sLat to sLon, lat to lon)
+            val dist = r?.meters ?: Geo.dist(sLat, sLon, lat, lon)
+            val min = ((r?.seconds ?: (dist / 1.2)) / 60).toInt().coerceAtLeast(1)
+            try {
+                val layer = m.routeLineManager?.layer ?: return@launch
+                val styles = com.kakao.vectormap.route.RouteLineStylesSet.from(
+                    "walk",
+                    com.kakao.vectormap.route.RouteLineStyles.from(
+                        com.kakao.vectormap.route.RouteLineStyle.from(dpf(6f), if (r != null) C.BLUE else C.GRAY)
+                    )
+                )
+                val seg = com.kakao.vectormap.route.RouteLineSegment.from(pts.map { LatLng.from(it.first, it.second) })
+                    .setStyles(styles.getStyles(0))
+                routeLine = layer.addRouteLine(com.kakao.vectormap.route.RouteLineOptions.from(seg).setStylesSet(styles))
+                lastProgMove = System.currentTimeMillis()
+                m.moveCamera(CameraUpdateFactory.fitMapPoints(pts.map { LatLng.from(it.first, it.second) }.toTypedArray(), dp(80)))
+            } catch (e: Exception) {
+                showMapError("길을 그리지 못했어요\n${e.message}")
+            }
+            routeInfo.text = "🚶 $name 까지 ${Geo.fmt(dist)} · 걸어서 약 ${min}분" + if (r == null) "\n(길 정보를 못 받아 곧은 선으로 보여요)" else ""
+            routeBar.visibility = View.VISIBLE
+            addBtn.visibility = View.GONE
+        }
+    }
+
+    fun clearRoute() {
+        routeLine?.let { l -> try { map?.routeLineManager?.layer?.remove(l) } catch (_: Exception) {} }
+        routeLine = null
+        routeTarget = null
+        if (::routeBar.isInitialized) routeBar.visibility = View.GONE
+        if (!placing) addBtn.visibility = View.VISIBLE
     }
 
     // ---------------- 장소 검색 ----------------
