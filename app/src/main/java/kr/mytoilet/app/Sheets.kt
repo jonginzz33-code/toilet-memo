@@ -166,6 +166,80 @@ object Sheets {
 
     // ---------------- 목록 ----------------
 
+    // ---------------- 문의 (사용자 ↔ 운영자) ----------------
+
+    /** 채팅 화면. asAdmin 이면 운영자가 uid 사용자에게 답장 */
+    fun inquiryChat(a: MainActivity, uid: String, asAdmin: Boolean, name: String = "") {
+        if (uid.isBlank()) return
+        val s = Sheet(a, if (asAdmin) "💬 $name" else "💬 문의하기", half = true)
+        val list = a.vbox(6)
+        s.add(list)
+        val (inBox, input) = a.field("", if (asAdmin) "답장을 적어 주세요" else "문의 내용을 적어 주세요", multi = true)
+        input.maxLines = 4
+        val row = a.hbox(8)
+        row.add(inBox, 1f)
+        val fmt = java.text.SimpleDateFormat("M/d a h:mm", java.util.Locale.KOREA)
+        fun load() {
+            a.lifecycleScope.launch {
+                val msgs = try { Inquiry.messages(uid) } catch (e: Exception) { list.removeAllViews(); list.add(a.text("불러오지 못했어요: ${e.message}", 13f, C.RED_TEXT)); return@launch }
+                Inquiry.markRead(uid, asAdmin)
+                list.removeAllViews()
+                list.add(a.text(if (asAdmin) "사용자에게 답장하면 앱 메뉴에 '새 답장'으로 보여요" else "운영자가 확인 후 답장해요 · 보통 하루 안", 11f, C.TEXT3, 400, Gravity.CENTER))
+                if (msgs.isEmpty() && !asAdmin) list.add(a.text("궁금한 점이나 고칠 점을 편하게 적어 주세요 🙂", 14f, C.TEXT2, 400, Gravity.CENTER))
+                for (m in msgs) {
+                    val mine = m.fromAdmin == asAdmin
+                    val bubble = a.text(m.text, 14.5f, if (mine) Color.WHITE else C.TEXT).apply {
+                        background = a.round(if (mine) C.BLUE else 0xFFFFFFFF.toInt(), 16f)
+                        setPadding(a.dp(12), a.dp(9), a.dp(12), a.dp(9))
+                        setTextIsSelectable(true)
+                    }
+                    val wrap = a.vbox(2).apply { gravity = if (mine) Gravity.END else Gravity.START }
+                    if (!mine) wrap.add(a.text(if (m.fromAdmin) "운영자" else name.ifBlank { "사용자" }, 11f, C.TEXT3, 700))
+                    wrap.addView(bubble, LinearLayout.LayoutParams(-2, -2).apply { gravity = if (mine) Gravity.END else Gravity.START; if (mine) leftMargin = a.dp(40) else rightMargin = a.dp(40) })
+                    wrap.add(a.text(fmt.format(java.util.Date(m.at)), 10.5f, C.TEXT3))
+                    list.addView(wrap, LinearLayout.LayoutParams(-1, -2))
+                }
+                // 맨 아래로
+                (list.parent?.parent as? androidx.core.widget.NestedScrollView)?.post { (list.parent?.parent as? androidx.core.widget.NestedScrollView)?.fullScroll(View.FOCUS_DOWN) }
+            }
+        }
+        row.add(a.btn("보내기", C.BLUE, Color.WHITE) {
+            val t = input.text.toString().trim()
+            if (t.isEmpty()) return@btn
+            if (t.length > 1000) { a.toast("1000자까지 보낼 수 있어요"); return@btn }
+            input.setText("")
+            a.lifecycleScope.launch {
+                try { if (asAdmin) Inquiry.reply(uid, t) else Inquiry.send(t); load() } catch (e: Exception) { a.toast("보내지 못했어요: ${e.message}") }
+            }
+        })
+        s.add(row)
+        s.show()
+        load()
+    }
+
+    /** 운영자: 문의함 */
+    fun inquiryList(a: MainActivity) {
+        val s = Sheet(a, "💬 문의함", half = true)
+        val box = a.vbox(8)
+        s.add(box)
+        s.show()
+        a.lifecycleScope.launch {
+            val list = try { Inquiry.threads() } catch (e: Exception) { box.add(a.text("불러오지 못했어요: ${e.message}", 13f, C.RED_TEXT)); return@launch }
+            if (list.isEmpty()) box.add(a.text("아직 문의가 없어요", 14f, C.TEXT2))
+            for (t in list) {
+                val r = a.hbox(8).apply { background = a.round(0xFFFFFFFF.toInt(), 12f); setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10)) }
+                r.add(View(a).apply { background = a.round(if (t.unreadAdmin) C.RED else 0x00000000, 5f) }.also { it.layoutParams = LinearLayout.LayoutParams(a.dp(9), a.dp(9)) })
+                val tx = a.vbox(2)
+                tx.add(a.text(t.name, 15f, C.TEXT, 700))
+                tx.add(a.text(t.last, 12f, C.TEXT2).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+                r.add(tx, 1f)
+                r.add(a.text(Geo.ago(t.lastAt), 11f, C.TEXT3))
+                r.setOnClickListener { s.dismiss(); inquiryChat(a, t.uid, asAdmin = true, name = t.name) }
+                box.add(r)
+            }
+        }
+    }
+
     // ---------------- 가입자 목록 (총관리자) ----------------
 
     fun users(a: MainActivity) {
@@ -925,6 +999,9 @@ object Sheets {
 
         s.add(a.btn("업데이트 확인 · 지금 v${BuildConfig.VERSION_NAME}") { a.checkUpdate(silent = false) })
         if (a.isAdmin || (Cloud.loggedIn && !a.realAdmin)) s.add(a.btn("🛠 관리자 페이지") { s.dismiss(); admin(a) })
+        val inq = a.btn("💬 문의하기", C.BLUE_BG, C.BLUE_TEXT) { Login.need(a, "문의하려면") { s.dismiss(); inquiryChat(a, Cloud.uid ?: "", asAdmin = false) } }
+        s.add(inq)
+        a.lifecycleScope.launch { if (Inquiry.myUnread()) inq.text = "💬 문의하기 · 새 답장 있어요" }
         s.add(a.btn("개인정보처리방침") {
             a.showPrivacy()
         })
@@ -1103,8 +1180,10 @@ object Sheets {
             box.add(r)
         }
 
-        // 가입자 목록 (총관리자)
+        // 가입자 목록·문의함 (총관리자)
         box.add(a.btn("👤 모든 가입자 보기", C.BLUE, Color.WHITE) { users(a) })
+        val newInq = try { Inquiry.threads().count { it.unreadAdmin } } catch (_: Exception) { 0 }
+        box.add(a.btn("💬 문의함" + if (newInq > 0) " · 새 문의 $newInq" else "", if (newInq > 0) C.RED else C.BLUE, Color.WHITE) { inquiryList(a) })
 
         // 그룹 설정 (총관리자)
         box.add(a.text("👥 그룹 설정", 16f, C.TEXT, 800))

@@ -120,6 +120,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 앱 안 문의 (사용자 ↔ 운영자)
+    match /inquiries/{uid} {
+      allow read, write: if signedIn() && (request.auth.uid == uid || isAdmin());
+      match /messages/{m} {
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+        allow create: if signedIn()
+          && request.resource.data.text is string && request.resource.data.text.size() <= 1000
+          && ((request.auth.uid == uid && request.resource.data.from == 'user')
+              || (isAdmin() && request.resource.data.from == 'admin'));
+        allow delete: if isAdmin();
+      }
+    }
+
     // 사용불가 신고 · 다시 열림
     match /unavail/{id} {
       allow read: if true;
