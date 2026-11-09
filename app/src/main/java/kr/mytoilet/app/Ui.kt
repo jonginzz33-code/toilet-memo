@@ -21,6 +21,7 @@ import com.google.android.material.materialswitch.MaterialSwitch
 /** 색 */
 object C {
     const val BLUE = 0xFF378ADD.toInt()
+    const val ORANGE = 0xFFF27A1A.toInt()   // 나만 보기 화장실 표시
     const val BLUE_DARK = 0xFF185FA5.toInt()
     const val BLUE_TEXT = 0xFF0C447C.toInt()
     const val BLUE_BG = 0xFFE6F1FB.toInt()

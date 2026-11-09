@@ -427,7 +427,7 @@ class MainActivity : AppCompatActivity() {
         }
         for (t in mine) {
             if (Geo.dist(clat, clon, t.lat, t.lon) > limit) continue
-            addLabel("m_${t.id}", t.lat, t.lon, C.BLUE, "나만 보기 · ${Geo.agoShort(t.updated)}", false, 0, t); shown++
+            addLabel("m_${t.id}", t.lat, t.lon, C.ORANGE, "나만 보기 · ${Geo.agoShort(t.updated)}", false, 0, t); shown++
         }
         countText.text = if (prefs.circleOnly) "원 안 화장실 ${shown}곳" else "근처 화장실 ${shown}곳"
         unavailChip.text = "근처 사용불가 ${unavailIn}곳"
