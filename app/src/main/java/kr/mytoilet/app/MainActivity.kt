@@ -249,8 +249,8 @@ class MainActivity : AppCompatActivity() {
                 cm.setPrimaryClip(ClipData.newPlainText("crash", text))
                 toast("복사했어요. Claude에게 붙여 주세요")
             }
-            .setNegativeButton("지도 켜기") { _, _ -> startMap() }
-            .setCancelable(false)
+            .setNegativeButton("닫기", null)
+            .setOnDismissListener { startMap() } // 어느 버튼을 눌러도 지도는 켜기
             .show()
     }
 
