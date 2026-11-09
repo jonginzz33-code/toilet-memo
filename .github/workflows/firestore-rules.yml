@@ -1,0 +1,29 @@
+name: Deploy Firestore rules
+
+# firestore.rules 가 바뀌면 Firebase 서버 권한 규칙에 자동으로 반영
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - firestore.rules
+      - firebase.json
+      - .github/workflows/firestore-rules.yml
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Deploy rules
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then echo "FIREBASE_SA 비밀값이 없어요"; exit 1; fi
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx --yes firebase-tools@13.29.1 deploy --only firestore:rules --project my-toilet-ce481 --non-interactive
+          rm -f "$RUNNER_TEMP/sa.json"
