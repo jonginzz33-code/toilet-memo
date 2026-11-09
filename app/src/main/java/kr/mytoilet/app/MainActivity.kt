@@ -137,7 +137,6 @@ class MainActivity : AppCompatActivity() {
             refreshUnavailable()
             checkUpdate(silent = true)
         }
-        handler.postDelayed(unavailTick, 120_000)
         handler.postDelayed(wiggle, 500)
     }
 
@@ -785,12 +784,8 @@ class MainActivity : AppCompatActivity() {
         drawToilets()
     }
 
-    private val unavailTick = object : Runnable {
-        override fun run() {
-            lifecycleScope.launch { refreshUnavailable() }
-            handler.postDelayed(this, 120_000)
-        }
-    }
+    // 사용불가 신고 목록은 앱을 켤 때 한 번만 읽음 (서버 무료 한도 아끼기).
+    // 내가 신고하거나 '다시 열렸어요'를 누르면 그때도 새로 읽음.
 
     /** 로그인 후 처리 */
     suspend fun afterLogin(quiet: Boolean = false) {
