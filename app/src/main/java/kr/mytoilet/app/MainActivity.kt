@@ -273,13 +273,8 @@ class MainActivity : AppCompatActivity() {
                 showMapError("지도를 열지 못했어요\n${error.message ?: error.javaClass.simpleName}")
             }
         }, object : KakaoMapReadyCallback() {
-            override fun onMapReady(kakaoMap: KakaoMap) = runOnUiThread {
-                map = kakaoMap
-                try {
-                    onMapReady(kakaoMap)
-                } catch (e: Exception) {
-                    showMapError("지도 준비 중 오류\n${e.javaClass.simpleName}: ${e.message}")
-                }
+            override fun onMapReady(kakaoMap: KakaoMap) {
+                runOnUiThread { mapReady(kakaoMap) }
             }
 
             override fun getPosition(): LatLng = LatLng.from(myLat ?: 37.5665, myLon ?: 126.9780)
@@ -287,7 +282,17 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    private fun onMapReady(m: KakaoMap) {
+    // 이름이 카카오의 onMapReady와 같으면 자기 자신을 끝없이 불러 앱이 꺼졌음 → 다른 이름으로
+    private fun mapReady(m: KakaoMap) {
+        map = m
+        try {
+            setupMap(m)
+        } catch (e: Exception) {
+            showMapError("지도 준비 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+        }
+    }
+
+    private fun setupMap(m: KakaoMap) {
         // 카카오 지도는 이 신호들을 화면 스레드가 아닌 곳에서 보낼 수 있어서, 화면 스레드로 넘겨서 처리
         m.setOnLabelClickListener { _, _, label ->
             runOnUiThread { onLabelClick(label) }
