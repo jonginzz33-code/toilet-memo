@@ -59,6 +59,36 @@ class MainActivity : AppCompatActivity() {
     private lateinit var placeBar: LinearLayout
     private lateinit var routeBar: LinearLayout
     private lateinit var urgentBtn: TextView
+    private lateinit var quickBar: LinearLayout
+
+    // 지도에 보일 종류 (관리자 퀵바로 바꿈. 일반 사용자는 공중화장실 스위치만)
+    val showMine get() = !isAdmin || prefs.fMine
+    val showGroup get() = !isAdmin || prefs.fGroup
+    val showPartner get() = !isAdmin || prefs.fPartner
+
+    /** 관리자 퀵바 다시 그리기 */
+    fun refreshQuickBar() {
+        if (!::quickBar.isInitialized) return
+        quickBar.removeAllViews()
+        quickBar.visibility = if (isAdmin) View.VISIBLE else View.GONE
+        if (!isAdmin) return
+        val all = prefs.fMine && prefs.fGroup && prefs.showPublic && prefs.fPartner
+        fun chipOf(label: String, on: Boolean, color: Int, click: () -> Unit) {
+            quickBar.add(text(label, 12f, if (on) Color.WHITE else C.TEXT3, 800, Gravity.CENTER).apply {
+                background = if (on) round(color, 14f) else round(Color.WHITE, 14f, 1, 0xFFDDDDDD.toInt())
+                setPadding(dp(9), dp(4), dp(9), dp(4))
+                setOnClickListener { click(); refreshQuickBar(); drawToilets(); if (prefs.showPublic) onCameraEnd() }
+            })
+        }
+        chipOf("전체", all, C.CAR) {
+            val v = !all
+            prefs.fMine = v; prefs.fGroup = v; prefs.showPublic = v; prefs.fPartner = v
+        }
+        chipOf("내 것", prefs.fMine, C.ORANGE) { prefs.fMine = !prefs.fMine }
+        chipOf("그룹", prefs.fGroup, C.PURPLE) { prefs.fGroup = !prefs.fGroup }
+        chipOf("공공", prefs.showPublic, C.GRAY) { prefs.showPublic = !prefs.showPublic }
+        chipOf("제휴", prefs.fPartner, C.GREEN) { prefs.fPartner = !prefs.fPartner }
+    }
     /** 위젯 '길찾기'로 열렸을 때: 위치·지도가 준비되면 차량/도보 고르기 창 */
     private var pendingRoute: Triple<Double, Double, String>? = null
     private lateinit var routeInfo: TextView
@@ -212,6 +242,9 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(10), dp(2), dp(10), dp(2))
             setOnClickListener { Sheets.menu(this@MainActivity) }
         })
+        // 관리자 퀵바: 켜진 종류만 지도에 보이기 (관리자에게만 보임)
+        quickBar = hbox(5).apply { visibility = View.GONE; setPadding(0, dp(6), 0, 0) }
+        titleBox.add(quickBar)
         topBox.add(bar)
         addBtn = primaryBtn("＋ 화장실 추가") { addAtMapCenter() }.apply { elevation = dpf(3f) }
         topBox.add(addBtn)
@@ -489,15 +522,18 @@ class MainActivity : AppCompatActivity() {
             shown++
         }
         for (t in groupToilets) {
+            if (!showGroup) break
             if (Geo.dist(clat, clon, t.lat, t.lon) > limit) continue
             addLabel("g_${t.groupId}_${t.id}", t.lat, t.lon, C.PURPLE, "그룹 · ${Geo.agoShort(t.updated)}", false, 0, t); shown++
         }
         for (t in mine) {
+            if (!showMine) break
             if (Geo.dist(clat, clon, t.lat, t.lon) > limit) continue
             addLabel("m_${t.id}", t.lat, t.lon, C.ORANGE, "나만 보기 · ${Geo.agoShort(t.updated)}", false, 0, t); shown++
         }
         // 제휴 가게: 화장실처럼 보고 있는 범위 안만, 크게
         for (p in partners) {
+            if (!showPartner) break
             if (Geo.dist(clat, clon, p.lat, p.lon) > limit) continue
             val (bmp, ay) = Icons.partnerPin(this, p.bitmap(), "제휴 · ${p.name}", scale)
             val id = "pt_${p.id}"
@@ -625,8 +661,8 @@ class MainActivity : AppCompatActivity() {
                 for (c in Geo.cellsAround(lat, lon, 2000.0)) pubs.addAll(Cloud.publicCell(c))
             } catch (_: Exception) {}
             busy(false)
-            val cands = (mine + groupToilets).map { Triple(it.lat, it.lon, it.title()) } +
-                partners.map { Triple(it.lat, it.lon, it.name) } +
+            val cands = ((if (showMine) mine else emptyList()) + (if (showGroup) groupToilets else emptyList())).map { Triple(it.lat, it.lon, it.title()) } +
+                (if (showPartner) partners else emptyList()).map { Triple(it.lat, it.lon, it.name) } +
                 pubs.filter { (unavail[it.id]?.count ?: 0) == 0 }.map { Triple(it.lat, it.lon, it.name) }
             val best = cands.minByOrNull { Geo.dist(lat, lon, it.first, it.second) }
             if (best == null || Geo.dist(lat, lon, best.first, best.second) > 2000) {
@@ -927,6 +963,7 @@ class MainActivity : AppCompatActivity() {
                 if (l.isNotEmpty() && !quiet) toast("폰에 있던 화장실 ${l.size}곳을 계정에 옮겼어요")
             }
             isAdmin = Cloud.isAdmin()
+            refreshQuickBar()
         } catch (e: Exception) {
             if (!quiet) toast("서버 연결 문제: ${e.message}")
         }

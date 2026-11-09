@@ -140,6 +140,16 @@ class Prefs(ctx: Context) {
     var showPublic: Boolean
         get() = p.getBoolean("showPublic", true)
         set(v) = p.edit().putBoolean("showPublic", v).apply()
+    // 관리자 퀵바: 지도에 보일 종류
+    var fMine: Boolean
+        get() = p.getBoolean("fMine", true)
+        set(v) = p.edit().putBoolean("fMine", v).apply()
+    var fGroup: Boolean
+        get() = p.getBoolean("fGroup", true)
+        set(v) = p.edit().putBoolean("fGroup", v).apply()
+    var fPartner: Boolean
+        get() = p.getBoolean("fPartner", true)
+        set(v) = p.edit().putBoolean("fPartner", v).apply()
     var termsAgreed: Boolean
         get() = p.getBoolean("terms", false)
         set(v) = p.edit().putBoolean("terms", v).apply()

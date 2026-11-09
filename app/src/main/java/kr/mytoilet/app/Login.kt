@@ -53,6 +53,7 @@ object Login {
     fun logout(a: MainActivity) {
         Cloud.auth.signOut()
         a.isAdmin = false
+        a.refreshQuickBar()
         a.prefs.uploadedLocal = false
         a.lifecycleScope.launch {
             try { CredentialManager.create(a).clearCredentialState(androidx.credentials.ClearCredentialStateRequest()) } catch (_: Exception) {}

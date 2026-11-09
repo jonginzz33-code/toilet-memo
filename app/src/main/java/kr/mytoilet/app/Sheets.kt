@@ -534,9 +534,9 @@ object Sheets {
         fun fill(publics: List<PublicToilet>) {
             box.removeAllViews()
             val items: List<Pair<Any, Double>> =
-                ((a.mine + a.groupToilets).map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) } +
+                (((if (a.showMine) a.mine else emptyList()) + (if (a.showGroup) a.groupToilets else emptyList())).map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) } +
                     publics.map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) }.filter { it.second <= 2000 } +
-                    a.partners.map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) }.filter { it.second <= 2000 })
+                    (if (a.showPartner) a.partners else emptyList()).map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) }.filter { it.second <= 2000 })
                     .sortedBy { it.second }
             if (items.isEmpty()) box.add(a.text("근처에 화장실이 없어요.\n맨 위 '＋ 화장실 추가'로 저장해 보세요.", 15f, C.TEXT2))
             for ((x, d) in items.take(80)) {
@@ -941,7 +941,7 @@ object Sheets {
                     box.add(a.text("아직 관리자가 없어요. 처음 한 번만 등록하면 이 계정이 관리자가 돼요.", 14f, C.TEXT2))
                     box.add(a.primaryBtn("이 계정을 관리자로 등록") {
                         a.lifecycleScope.launch {
-                            try { Cloud.claimAdmin(); a.isAdmin = true; s.dismiss(); admin(a) } catch (e: Exception) { a.toast("실패: ${e.message}") }
+                            try { Cloud.claimAdmin(); a.isAdmin = true; a.refreshQuickBar(); s.dismiss(); admin(a) } catch (e: Exception) { a.toast("실패: ${e.message}") }
                         }
                     })
                     return@launch
@@ -951,6 +951,7 @@ object Sheets {
                     return@launch
                 }
                 a.isAdmin = true
+                a.refreshQuickBar()
                 fillAdmin(a, box)
             } catch (e: Exception) {
                 box.add(a.text("불러오지 못했어요: ${e.message}", 14f, C.RED_TEXT))
