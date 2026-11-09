@@ -60,6 +60,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeBar: LinearLayout
     private lateinit var urgentBtn: TextView
     private lateinit var quickBar: LinearLayout
+    /** 반경이 이보다 넓으면 숫자 동그라미로 묶어서 보여 줌 */
+    private val CLUSTER_M = 1500.0
     private lateinit var adminSwitch: TextView
 
     // 지도에 보일 종류 (관리자 퀵바로 바꿈. 일반 사용자는 공중화장실 스위치만)
@@ -530,6 +532,12 @@ class MainActivity : AppCompatActivity() {
             labelTargets[id] = target
         }
 
+        // 넓게 볼 때(반경 1.5km 넘음): 가까운 것끼리 종류별 숫자 동그라미로 묶기
+        if (radiusM > CLUSTER_M) {
+            drawClusters(layer, clat, clon, limit)
+            return
+        }
+
         val near = publics.map { it to Geo.dist(clat, clon, it.lat, it.lon) }
             .filter { it.second <= limit }.sortedBy { it.second }.take(250)
         for ((p, _) in near) {
@@ -569,9 +577,50 @@ class MainActivity : AppCompatActivity() {
         unavailChip.visibility = if (unavailIn > 0) View.VISIBLE else View.GONE
     }
 
+    /** 숫자 동그라미를 누르면 그 자리로 확대 */
+    private class Cluster(val lat: Double, val lon: Double)
+
+    private fun drawClusters(layer: com.kakao.vectormap.label.LabelLayer, clat: Double, clon: Double, limit: Double) {
+        // 종류: 0 공공(회색) 1 내 것(주황) 2 그룹(보라) 3 제휴(초록)
+        val items = ArrayList<Triple<Int, Double, Double>>()
+        var unavailIn = 0
+        for (p in publics) if (Geo.dist(clat, clon, p.lat, p.lon) <= limit) {
+            items.add(Triple(0, p.lat, p.lon)); if ((unavail[p.id]?.count ?: 0) > 0) unavailIn++
+        }
+        if (showMine) for (t in mine) if (Geo.dist(clat, clon, t.lat, t.lon) <= limit) items.add(Triple(1, t.lat, t.lon))
+        if (showGroup) for (t in groupToilets) if (Geo.dist(clat, clon, t.lat, t.lon) <= limit) items.add(Triple(2, t.lat, t.lon))
+        if (showPartner) for (p in partners) if (Geo.dist(clat, clon, p.lat, p.lon) <= limit) { items.add(Triple(3, p.lat, p.lon)); Partners.countView(p.id) }
+
+        // 원 지름을 약 5칸으로 나눈 격자
+        val cellM = radiusM / 2.5
+        val dLat = cellM / 111000.0
+        val dLon = cellM / (111000.0 * Math.cos(Math.toRadians(clat)))
+        val groups = items.groupBy { Triple(it.first, Math.floor(it.second / dLat).toInt(), Math.floor(it.third / dLon).toInt()) }
+        val colors = intArrayOf(C.GRAY, C.ORANGE, C.PURPLE, C.GREEN)
+        var i = 0
+        for ((key, list) in groups) {
+            val lat = list.sumOf { it.second } / list.size
+            val lon = list.sumOf { it.third } / list.size
+            val bmp = Icons.countBubble(this, colors[key.first], list.size)
+            val id = "c_${i++}"
+            val opt = LabelOptions.from(id, LatLng.from(lat, lon))
+                .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, 0.5f)))
+                .setClickable(true)
+                .setRank(if (key.first == 0) 1L else 50L)
+            layer.addLabel(opt)?.let { toiletLabels.add(it); labelTargets[id] = Cluster(lat, lon) }
+        }
+        countText.text = if (prefs.circleOnly) "원 안 화장실 ${items.size}곳" else "근처 화장실 ${items.size}곳"
+        unavailChip.text = "근처 사용불가 ${unavailIn}곳"
+        unavailChip.visibility = if (unavailIn > 0) View.VISIBLE else View.GONE
+    }
+
     private fun onLabelClick(label: Label) {
         if (placing) return
         when (val t = labelTargets[label.labelId]) {
+            is Cluster -> {
+                val z = (map?.cameraPosition?.zoomLevel ?: 13) + 2
+                move(t.lat, t.lon, z)
+            }
             is Toilet -> Sheets.toiletDetail(this, t)
             is PublicToilet -> Sheets.publicDetail(this, t)
             is Partner -> Sheets.partnerDetail(this, t)
@@ -687,7 +736,14 @@ class MainActivity : AppCompatActivity() {
             if (best == null || Geo.dist(lat, lon, best.first, best.second) > 2000) {
                 toast("2km 안에 화장실을 찾지 못했어요"); return@launch
             }
-            showRoute(best.first, best.second, best.third, car = false)
+            val s = Sheet(this@MainActivity, "🚨 가장 가까운 화장실로 안내")
+            s.add(text("${best.third} · ${Geo.fmt(Geo.dist(lat, lon, best.first, best.second))}", 14f, C.TEXT2))
+            val row = hbox(8)
+            row.add(btn("🚗 차량 이동", C.CAR, Color.WHITE) { s.dismiss(); showRoute(best.first, best.second, best.third, car = true) }, 1f)
+            row.add(btn("🚶 도보 이동", C.BLUE, Color.WHITE) { s.dismiss(); showRoute(best.first, best.second, best.third, car = false) }, 1f)
+            s.add(row)
+            s.add(btn("취소") { s.dismiss() })
+            s.show()
         }
     }
 

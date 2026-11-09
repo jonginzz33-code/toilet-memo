@@ -194,6 +194,25 @@ object Icons {
         return bmp to (tipY / h)
     }
 
+    /** 숫자 동그라미 (넓게 볼 때 묶음 표시): 종류 색 + 개수, 많을수록 조금 크게 */
+    fun countBubble(ctx: Context, color: Int, n: Int): Bitmap {
+        val d = ctx.resources.displayMetrics.density
+        val r = (14 + minOf(12.0, Math.log(n.toDouble() + 1) / Math.log(2.0) * 2.2)).toFloat() * d
+        val size = (r * 2 + 6 * d).toInt()
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val cx = size / 2f
+        c.drawCircle(cx, cx + 1.5f * d, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = 0x33000000 })
+        c.drawCircle(cx, cx, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color })
+        c.drawCircle(cx, cx, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.5f * d; this.color = Color.WHITE })
+        val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = (if (n >= 100) 12f else 14f) * d; typeface = Fonts.bold; textAlign = Paint.Align.CENTER; this.color = Color.WHITE
+        }
+        val fm = tp.fontMetrics
+        c.drawText(if (n > 999) "999+" else n.toString(), cx, cx - (fm.ascent + fm.descent) / 2, tp)
+        return bmp
+    }
+
     /** 기준점(그림 가운데)의 세로 위치 비율 */
     fun toiletAnchorY(ctx: Context, unavailable: Int): Float {
         val d = ctx.resources.displayMetrics.density
