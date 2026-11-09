@@ -59,7 +59,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var placeBar: LinearLayout
     private lateinit var routeBar: LinearLayout
     private lateinit var urgentBtn: TextView
-    private var widgetAt = 0L
+    /** 위젯 '길찾기'로 열렸을 때: 위치·지도가 준비되면 차량/도보 고르기 창 */
+    private var pendingRoute: Triple<Double, Double, String>? = null
     private lateinit var routeInfo: TextView
     private var routeLine: com.kakao.vectormap.route.RouteLine? = null
     private var routeTarget: Triple<Double, Double, String>? = null
@@ -140,6 +141,7 @@ class MainActivity : AppCompatActivity() {
             checkUpdate(silent = true)
         }
         handler.postDelayed(wiggle, 500)
+        takeRouteIntent(intent)
     }
 
     // ---------------- 화면 ----------------
@@ -354,6 +356,7 @@ class MainActivity : AppCompatActivity() {
         }
         m.setOnCameraMoveEndListener { _, _, _ -> runOnUiThread { onCameraEnd() } }
         myLat?.let { updateMe() }
+        tryPendingRoute()
         handler.postDelayed({ onCameraEnd() }, 400)
     }
 
@@ -486,7 +489,7 @@ class MainActivity : AppCompatActivity() {
             val l = r.lastLocation ?: return
             val first = myLat == null
             myLat = l.latitude; myLon = l.longitude
-            if (first || System.currentTimeMillis() - widgetAt > 60_000) { widgetAt = System.currentTimeMillis(); updateWidget() }
+            if (first) tryPendingRoute()
             try { updateMe() } catch (e: Exception) {
                 showMapError("내 위치 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
             }
@@ -589,12 +592,36 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- 위젯 ----------------
 
-    /** 홈 화면 위젯에 가장 가까운 내 화장실(비밀번호 있는 것 우선) 저장 */
+    /** 위젯용 내 화장실 목록 저장 (거리는 위젯 '새로고침' 때만 계산) */
     fun updateWidget() {
-        val lat = myLat ?: return
-        val lon = myLon ?: return
-        val t = (mine + groupToilets).minByOrNull { Geo.dist(lat, lon, it.lat, it.lon) }
-        NearestWidget.save(this, t, t?.let { Geo.dist(lat, lon, it.lat, it.lon) })
+        NearestWidget.saveList(this, (mine + groupToilets).distinctBy { it.id })
+    }
+
+    private fun takeRouteIntent(i: Intent?) {
+        val lat = i?.getDoubleExtra(NearestWidget.EXTRA_LAT, 0.0) ?: 0.0
+        val lon = i?.getDoubleExtra(NearestWidget.EXTRA_LON, 0.0) ?: 0.0
+        val name = i?.getStringExtra(NearestWidget.EXTRA_NAME) ?: return
+        if (lat == 0.0) return
+        i.removeExtra(NearestWidget.EXTRA_NAME)
+        pendingRoute = Triple(lat, lon, name)
+        tryPendingRoute()
+    }
+
+    private fun tryPendingRoute() {
+        val r = pendingRoute ?: return
+        if (map == null || myLat == null) return
+        pendingRoute = null
+        val s = Sheet(this, "${r.third} 길찾기")
+        val row = hbox(8)
+        row.add(btn("🚗 차량 길찾기", C.CAR, Color.WHITE) { s.dismiss(); showRoute(r.first, r.second, r.third, car = true) }, 1f)
+        row.add(btn("🚶 도보 길찾기", C.BLUE, Color.WHITE) { s.dismiss(); showRoute(r.first, r.second, r.third, car = false) }, 1f)
+        s.add(row)
+        s.show()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeRouteIntent(intent)
     }
 
     // ---------------- 길 보기 ----------------
