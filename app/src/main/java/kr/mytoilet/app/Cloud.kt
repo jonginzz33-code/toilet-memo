@@ -54,13 +54,39 @@ object Cloud {
 
     // ---------- 그룹 ----------
 
+    @Suppress("UNCHECKED_CAST")
+    private fun toGroup(it: com.google.firebase.firestore.DocumentSnapshot) = Group(
+        it.id, it.getString("name") ?: "그룹", it.getString("owner") ?: "", it.getString("code") ?: "",
+        (it.get("members") as? List<String>) ?: emptyList(),
+        (it.get("subs") as? List<String>) ?: emptyList(),
+        (it.get("names") as? Map<String, String>) ?: emptyMap(),
+        (it.getLong("maxMembers") ?: 0L).toInt()
+    )
+
     suspend fun myGroups(): List<Group> {
         val u = uid ?: return emptyList()
-        return db.collection("groups").whereArrayContains("members", u).get().await().documents.map {
-            @Suppress("UNCHECKED_CAST")
-            Group(it.id, it.getString("name") ?: "그룹", it.getString("owner") ?: "", it.getString("code") ?: "",
-                (it.get("members") as? List<String>) ?: emptyList())
-        }
+        val list = db.collection("groups").whereArrayContains("members", u).get().await().documents.map { toGroup(it) }
+        // 내 이름이 없거나 바뀌었으면 넣어 둠 (멤버 목록에 이름 보이게)
+        for (g in list) if (g.names[u] != myName) try {
+            db.collection("groups").document(g.id).update("names.$u", myName).await()
+        } catch (_: Exception) {}
+        return list
+    }
+
+    suspend fun allGroups(): List<Group> =
+        db.collection("groups").get().await().documents.map { toGroup(it) }
+
+    suspend fun groupConfig(): GroupConfig = try {
+        val d = db.collection("config").document("groups").get().await()
+        GroupConfig((d.getLong("defaultMax") ?: 10L).toInt(), (d.getLong("maxGroups") ?: 3L).toInt())
+    } catch (_: Exception) { GroupConfig() }
+
+    suspend fun setGroupConfig(c: GroupConfig) {
+        db.collection("config").document("groups").set(mapOf("defaultMax" to c.defaultMax, "maxGroups" to c.maxGroups)).await()
+    }
+
+    suspend fun setGroupMax(id: String, max: Int) {
+        db.collection("groups").document(id).update("maxMembers", max).await()
     }
 
     private fun newCode(): String {
@@ -72,16 +98,65 @@ object Cloud {
         val u = uid ?: throw IllegalStateException("로그인이 필요해요")
         val code = newCode()
         val ref = db.collection("groups").document()
-        ref.set(mapOf("name" to name, "owner" to u, "code" to code, "members" to listOf(u), "created" to System.currentTimeMillis())).await()
-        return Group(ref.id, name, u, code, listOf(u))
+        ref.set(mapOf("name" to name, "owner" to u, "code" to code, "members" to listOf(u), "subs" to emptyList<String>(),
+            "names" to mapOf(u to myName), "created" to System.currentTimeMillis())).await()
+        return Group(ref.id, name, u, code, listOf(u), emptyList(), mapOf(u to myName))
     }
 
-    suspend fun joinGroup(code: String): Group? {
-        val u = uid ?: return null
-        val q = db.collection("groups").whereEqualTo("code", code.uppercase()).limit(1).get().await()
-        val d = q.documents.firstOrNull() ?: return null
-        d.reference.update("members", FieldValue.arrayUnion(u)).await()
-        return Group(d.id, d.getString("name") ?: "그룹", d.getString("owner") ?: "", code, emptyList())
+    /** 코드로 가입 요청. 결과 문구를 돌려줌 */
+    suspend fun requestJoin(code: String): String {
+        val u = uid ?: return "로그인이 필요해요"
+        val q = db.collection("groups").whereEqualTo("code", code.trim().uppercase()).limit(1).get().await()
+        val d = q.documents.firstOrNull() ?: return "그런 코드의 그룹이 없어요"
+        val g = toGroup(d)
+        if (u in g.members) return "이미 '${g.name}' 그룹에 들어가 있어요"
+        val cfg = groupConfig()
+        if (g.members.size >= g.limit(cfg.defaultMax)) return "'${g.name}' 그룹이 꽉 찼어요 (${g.members.size}/${g.limit(cfg.defaultMax)}명)"
+        val mine = db.collection("groups").whereArrayContains("members", u).get().await().size()
+        if (mine >= cfg.maxGroups) return "그룹은 최대 ${cfg.maxGroups}개까지 들어갈 수 있어요"
+        d.reference.collection("requests").document(u).set(mapOf("name" to myName, "at" to System.currentTimeMillis())).await()
+        return "'${g.name}'에 가입 요청을 보냈어요.\n방장이나 부방장이 수락하면 들어가져요."
+    }
+
+    suspend fun joinRequests(gid: String): List<JoinRequest> =
+        db.collection("groups").document(gid).collection("requests").get().await().documents.map {
+            JoinRequest(it.id, it.getString("name") ?: "사용자", it.getLong("at") ?: 0L)
+        }.sortedBy { it.at }
+
+    /** 가입 요청 수락 (방장·부방장). 실패하면 이유 문구 */
+    suspend fun acceptJoin(g: Group, r: JoinRequest): String? {
+        val cfg = groupConfig()
+        val fresh = toGroup(db.collection("groups").document(g.id).get().await())
+        if (fresh.members.size >= fresh.limit(cfg.defaultMax)) return "그룹이 꽉 찼어요 (${fresh.members.size}/${fresh.limit(cfg.defaultMax)}명)"
+        val theirs = db.collection("groups").whereArrayContains("members", r.uid).get().await().size()
+        if (theirs >= cfg.maxGroups) {
+            rejectJoin(g.id, r.uid)
+            return "${r.name}님은 이미 그룹 ${cfg.maxGroups}개에 들어가 있어서 받을 수 없어요"
+        }
+        db.collection("groups").document(g.id).update(mapOf("members" to FieldValue.arrayUnion(r.uid), "names.${r.uid}" to r.name)).await()
+        rejectJoin(g.id, r.uid)
+        return null
+    }
+
+    suspend fun rejectJoin(gid: String, who: String) {
+        db.collection("groups").document(gid).collection("requests").document(who).delete().await()
+    }
+
+    /** 내보내기 (방장·부방장) */
+    suspend fun kick(gid: String, who: String) {
+        db.collection("groups").document(gid).update(mapOf("members" to FieldValue.arrayRemove(who), "subs" to FieldValue.arrayRemove(who))).await()
+    }
+
+    /** 부방장 지정·해제 (방장만) */
+    suspend fun setSub(gid: String, who: String, on: Boolean) {
+        db.collection("groups").document(gid).update("subs", if (on) FieldValue.arrayUnion(who) else FieldValue.arrayRemove(who)).await()
+    }
+
+    /** 초대 코드 새로 만들기 (방장만) */
+    suspend fun newGroupCode(gid: String): String {
+        val c = newCode()
+        db.collection("groups").document(gid).update("code", c).await()
+        return c
     }
 
     suspend fun renameGroup(id: String, name: String) {
@@ -90,7 +165,7 @@ object Cloud {
 
     suspend fun leaveGroup(id: String) {
         val u = uid ?: return
-        db.collection("groups").document(id).update("members", FieldValue.arrayRemove(u)).await()
+        db.collection("groups").document(id).update(mapOf("members" to FieldValue.arrayRemove(u), "subs" to FieldValue.arrayRemove(u))).await()
     }
 
     suspend fun deleteGroup(id: String) {

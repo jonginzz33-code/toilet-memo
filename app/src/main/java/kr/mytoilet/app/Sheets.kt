@@ -166,6 +166,84 @@ object Sheets {
 
     // ---------------- 목록 ----------------
 
+    // ---------------- 그룹 관리 (방장·부방장) ----------------
+
+    fun groupManage(a: MainActivity, g0: Group) {
+        val s = Sheet(a, "👥 ${g0.name}", half = true)
+        val box = a.vbox(8)
+        s.add(box)
+        fun reload() {
+            a.lifecycleScope.launch {
+                val me = Cloud.uid
+                val g = try { Cloud.myGroups().firstOrNull { it.id == g0.id } } catch (_: Exception) { null }
+                box.removeAllViews()
+                if (g == null) { box.add(a.text("그룹을 찾을 수 없어요", 14f, C.TEXT2)); return@launch }
+                val cfg = Cloud.groupConfig()
+                val isOwner = g.isOwner(me)
+                box.add(a.text("${g.members.size} / ${g.limit(cfg.defaultMax)}명", 14f, C.PURPLE_TEXT, 800))
+
+                // 초대 코드
+                val codeCard = a.vbox(4).apply { background = a.round(0xFFFFFFFF.toInt(), 14f); setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10)) }
+                val cr = a.hbox(6)
+                cr.add(a.text("초대 코드  ${g.code}", 15f, C.TEXT, 800).apply { letterSpacing = 0.1f }, 1f)
+                cr.add(a.btn("복사") { a.copy(g.code) })
+                if (isOwner) cr.add(a.btn("새 코드", C.RED_BG, C.RED_TEXT) {
+                    a.confirm("새 코드를 만들까요?", "예전 코드 ${g.code}는 바로 막혀요.", "새 코드") {
+                        a.lifecycleScope.launch { try { val c = Cloud.newGroupCode(g.id); a.toast("새 코드: $c"); reload() } catch (e: Exception) { a.toast("실패: ${e.message}") } }
+                    }
+                })
+                codeCard.add(cr)
+                if (isOwner) codeCard.add(a.text("새 코드를 만들면 예전 코드는 바로 막혀요 (방장만)", 11f, C.TEXT3))
+                box.add(codeCard)
+
+                // 가입 요청
+                val reqs = try { Cloud.joinRequests(g.id) } catch (_: Exception) { emptyList() }
+                box.add(a.text("🙋 가입 요청 ${reqs.size}", 13f, C.TEXT2, 800))
+                if (reqs.isEmpty()) box.add(a.text("새 요청이 없어요", 12f, C.TEXT3))
+                for (r in reqs) {
+                    val rr = a.hbox(6).apply { background = a.round(0xFFFFFFFF.toInt(), 12f); setPadding(a.dp(12), a.dp(8), a.dp(8), a.dp(8)) }
+                    rr.add(a.text(r.name, 14f, C.TEXT, 700), 1f)
+                    rr.add(a.btn("수락", C.GREEN, Color.WHITE) {
+                        a.lifecycleScope.launch {
+                            val err = try { Cloud.acceptJoin(g, r) } catch (e: Exception) { "실패: ${e.message}" }
+                            a.toast(err ?: "${r.name}님을 받았어요"); reload(); a.reloadMine()
+                        }
+                    })
+                    rr.add(a.btn("거절") { a.lifecycleScope.launch { try { Cloud.rejectJoin(g.id, r.uid) } catch (_: Exception) {}; reload() } })
+                    box.add(rr)
+                }
+
+                // 멤버
+                box.add(a.text("멤버 ${g.members.size}", 13f, C.TEXT2, 800))
+                val ordered = listOf(g.owner) + g.subs.filter { it != g.owner } + g.members.filter { it != g.owner && it !in g.subs }
+                for (u in ordered.filter { it in g.members }) {
+                    val mr = a.hbox(6).apply { background = a.round(0xFFFFFFFF.toInt(), 12f); setPadding(a.dp(12), a.dp(8), a.dp(8), a.dp(8)) }
+                    mr.add(a.text(g.nameOf(u) + if (u == me) " (나)" else "", 14f, C.TEXT, 700), 1f)
+                    when {
+                        u == g.owner -> mr.add(a.chip("👑 방장", C.AMBER_BG, C.AMBER_TEXT))
+                        u in g.subs -> mr.add(a.chip("⭐ 부방장", C.PURPLE_BG, C.PURPLE_TEXT))
+                    }
+                    if (isOwner && u != g.owner) {
+                        val sub = u in g.subs
+                        mr.add(a.btn(if (sub) "해제" else "부방장 지정") {
+                            a.lifecycleScope.launch { try { Cloud.setSub(g.id, u, !sub); reload() } catch (e: Exception) { a.toast("실패: ${e.message}") } }
+                        })
+                    }
+                    // 방장은 누구나(본인 빼고), 부방장은 일반 멤버만 내보내기
+                    val canKick = u != me && u != g.owner && (isOwner || (g.isSub(me) && u !in g.subs))
+                    if (canKick) mr.add(a.btn("내보내기", C.RED_BG, C.RED_TEXT) {
+                        a.confirm("내보낼까요?", "${g.nameOf(u)}님을 '${g.name}' 그룹에서 내보내요.", "내보내기", true) {
+                            a.lifecycleScope.launch { try { Cloud.kick(g.id, u); reload(); a.reloadMine() } catch (e: Exception) { a.toast("실패: ${e.message}") } }
+                        }
+                    })
+                    box.add(mr)
+                }
+            }
+        }
+        s.show()
+        reload()
+    }
+
     // ---------------- 제휴 가게 ----------------
 
     private fun photoView(a: MainActivity, b: android.graphics.Bitmap?, sizeDp: Int): View =
@@ -854,17 +932,20 @@ object Sheets {
                 finally { a.busy(false) }
                 listBox.removeAllViews()
                 if (a.groups.isEmpty()) listBox.add(a.text("아직 그룹이 없어요. 새 그룹을 만들거나 초대 코드로 참여하세요.", 14f, C.TEXT2))
+                val cfg = Cloud.groupConfig()
                 for (g in a.groups) {
                     val card = a.vbox(6).apply {
                         background = a.round(0xFFFFFFFF.toInt(), 16f)
                         setPadding(a.dp(14), a.dp(12), a.dp(14), a.dp(12))
                     }
-                    val owner = g.owner == Cloud.uid
+                    val owner = g.isOwner(Cloud.uid)
                     val head = a.hbox(6)
                     head.add(a.text(g.name, 16f, C.TEXT, 700), 1f)
-                    if (owner) head.add(a.chip("그룹장", C.GREEN_BG, C.GREEN_TEXT))
+                    if (owner) head.add(a.chip("👑 방장", C.AMBER_BG, C.AMBER_TEXT))
+                    else if (g.isSub(Cloud.uid)) head.add(a.chip("⭐ 부방장", C.PURPLE_BG, C.PURPLE_TEXT))
                     card.add(head)
-                    card.add(a.text("${g.members.size}명 · 초대 코드 ${g.code}", 13f, C.TEXT2))
+                    card.add(a.text("${g.members.size} / ${g.limit(cfg.defaultMax)}명 · 초대 코드 ${g.code}", 13f, C.TEXT2))
+                    if (g.canManage(Cloud.uid)) card.add(a.btn("👥 멤버·가입 요청 관리", C.PURPLE, Color.WHITE) { s.dismiss(); groupManage(a, g) })
                     val row = a.hbox(6)
                     row.add(a.btn("코드 복사") { a.copy(g.code) }, 1f)
                     if (owner) {
@@ -899,12 +980,10 @@ object Sheets {
             }
         }, 1f)
         row.add(a.btn("코드로 참여") {
-            a.ask("그룹 참여", "초대 코드 6자리", "ABC123") { c ->
+            a.ask("그룹 들어가기", "초대 코드 6자리", "ABC123") { c ->
                 a.lifecycleScope.launch {
-                    try {
-                        val g = Cloud.joinGroup(c.trim())
-                        if (g == null) a.toast("그런 코드의 그룹이 없어요") else { a.toast("${g.name} 그룹에 참여했어요"); reload(); a.reloadMine() }
-                    } catch (e: Exception) { a.toast("실패: ${e.message}") }
+                    val msg = try { Cloud.requestJoin(c) } catch (e: Exception) { "실패: ${e.message}" }
+                    a.confirm("그룹 들어가기", msg, "확인") {}
                 }
             }
         }, 1f)
@@ -988,6 +1067,38 @@ object Sheets {
             r.add(tx, 1f)
             r.add(a.text("📊 통계", 13f, C.GREEN_TEXT, 700).apply { setPadding(a.dp(8), a.dp(6), a.dp(4), a.dp(6)); setOnClickListener { partnerStats(a, p) } })
             r.setOnClickListener { a.closeSheets(); partnerDetail(a, p) }
+            box.add(r)
+        }
+
+        // 그룹 설정 (총관리자)
+        box.add(a.text("👥 그룹 설정", 16f, C.TEXT, 800))
+        val gcfg = Cloud.groupConfig()
+        val (gb1, defMax) = a.field("새 그룹 기본 최대 인원 (명)", "10", gcfg.defaultMax.toString())
+        val (gb2, maxG) = a.field("1인당 최대 가입 그룹 (개)", "3", gcfg.maxGroups.toString())
+        listOf(defMax, maxG).forEach { it.inputType = android.text.InputType.TYPE_CLASS_NUMBER }
+        box.add(gb1); box.add(gb2)
+        box.add(a.btn("그룹 설정 저장", C.GREEN, Color.WHITE) {
+            val d = defMax.text.toString().toIntOrNull()
+            val m = maxG.text.toString().toIntOrNull()
+            if (d == null || d < 2 || m == null || m < 1) { a.toast("숫자를 확인해 주세요 (인원 2명 이상, 그룹 1개 이상)"); return@btn }
+            a.lifecycleScope.launch { try { Cloud.setGroupConfig(GroupConfig(d, m)); a.toast("저장했어요") } catch (e: Exception) { a.toast("실패: ${e.message}") } }
+        })
+        val allG = try { Cloud.allGroups() } catch (_: Exception) { emptyList() }
+        box.add(a.text("그룹별 최대 인원 (${allG.size}개) · 누르면 바꾸기", 12f, C.TEXT2, 600))
+        for (g in allG.sortedByDescending { it.members.size }) {
+            val r = a.hbox(8).apply { background = a.round(0xFFFFFFFF.toInt(), 12f); setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10)) }
+            r.add(a.text(g.name, 14f, C.TEXT, 700), 1f)
+            val lim = a.text("${g.members.size} / ${g.limit(gcfg.defaultMax)}명", 14f, C.PURPLE_TEXT, 800)
+            r.add(lim)
+            r.setOnClickListener {
+                a.ask("${g.name} 최대 인원", "최대 인원 (명)", "10", g.limit(gcfg.defaultMax).toString()) { v ->
+                    val n = v.trim().toIntOrNull()
+                    if (n == null || n < g.members.size || n < 2) { a.toast("지금 인원(${g.members.size}명)보다 크게 적어 주세요"); return@ask }
+                    a.lifecycleScope.launch {
+                        try { Cloud.setGroupMax(g.id, n); lim.text = "${g.members.size} / ${n}명"; a.toast("바꿨어요") } catch (e: Exception) { a.toast("실패: ${e.message}") }
+                    }
+                }
+            }
             box.add(r)
         }
 

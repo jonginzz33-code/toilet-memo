@@ -38,19 +38,58 @@ service cloud.firestore {
     }
 
     // 그룹 + 그룹 화장실
+    // 방장: 그룹 관리 전부 · 부방장: 가입 수락·멤버 내보내기 · 멤버: 내 이름 바꾸기·나가기 · 총관리자: 최대 인원
+    function groupMax() {
+      return 'maxMembers' in resource.data ? resource.data.maxMembers
+        : (exists(/databases/$(database)/documents/config/groups)
+            ? get(/databases/$(database)/documents/config/groups).data.defaultMax : 10);
+    }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function subsOf() { return 'subs' in resource.data ? resource.data.subs : []; }
     match /groups/{gid} {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.owner == request.auth.uid
-        && request.resource.data.members == [request.auth.uid];
+        && request.resource.data.members == [request.auth.uid]
+        && !('maxMembers' in request.resource.data)
+        && (!('subs' in request.resource.data) || request.resource.data.subs == []);
       allow update: if signedIn() && (
-        resource.data.owner == request.auth.uid
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+        // 방장: 최대 인원·방장 바꾸기 빼고 전부, 인원 제한 지키기
+        (resource.data.owner == request.auth.uid
+          && !changed().hasAny(['maxMembers', 'owner'])
+          && request.resource.data.members.size() <= groupMax())
+        // 부방장: 멤버·이름만, 방장·부방장은 못 내보냄, 인원 제한 지키기
+        || (request.auth.uid in subsOf()
+          && changed().hasOnly(['members', 'names'])
+          && resource.data.owner in request.resource.data.members
+          && request.resource.data.members.hasAll(subsOf())
+          && request.resource.data.members.size() <= groupMax())
+        // 멤버: 나가기 (나만 빠짐)
+        || (request.auth.uid in resource.data.members
+          && changed().hasOnly(['members', 'subs'])
+          && request.resource.data.members.toSet() == resource.data.members.toSet().difference([request.auth.uid].toSet()))
+        // 멤버: 내 이름만 바꾸기
+        || (request.auth.uid in resource.data.members
+          && changed().hasOnly(['names'])
+          && request.resource.data.names.diff('names' in resource.data ? resource.data.names : {}).affectedKeys().hasOnly([request.auth.uid]))
+        // 총관리자: 최대 인원만
+        || (isAdmin() && changed().hasOnly(['maxMembers']))
       );
       allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+
       match /toilets/{id} {
         allow read, write: if signedIn()
           && request.auth.uid in get(/databases/$(database)/documents/groups/$(gid)).data.members;
+      }
+
+      // 가입 요청: 본인이 보내고, 방장·부방장이 보고 지움
+      match /requests/{uid} {
+        function g() { return get(/databases/$(database)/documents/groups/$(gid)).data; }
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['name', 'at']);
+        allow read, delete: if signedIn() && (request.auth.uid == uid
+          || g().owner == request.auth.uid
+          || request.auth.uid in ('subs' in g() ? g().subs : []));
       }
     }
 

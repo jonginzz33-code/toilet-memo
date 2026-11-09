@@ -87,7 +87,24 @@ data class PublicToilet(
     }
 }
 
-data class Group(val id: String, val name: String, val owner: String, val code: String, val members: List<String>)
+data class Group(
+    val id: String, val name: String, val owner: String, val code: String, val members: List<String>,
+    val subs: List<String> = emptyList(),          // 부방장
+    val names: Map<String, String> = emptyMap(),   // 멤버 이름
+    val maxMembers: Int = 0                         // 0 이면 기본값(총관리자 설정)
+) {
+    fun isOwner(u: String?) = u != null && u == owner
+    fun isSub(u: String?) = u != null && u in subs
+    fun canManage(u: String?) = isOwner(u) || isSub(u)
+    fun nameOf(u: String) = names[u]?.takeIf { it.isNotBlank() } ?: "멤버"
+    fun limit(defaultMax: Int) = if (maxMembers > 0) maxMembers else defaultMax
+}
+
+/** 그룹 가입 요청 */
+data class JoinRequest(val uid: String, val name: String, val at: Long)
+
+/** 총관리자가 정하는 그룹 설정 */
+data class GroupConfig(val defaultMax: Int = 10, val maxGroups: Int = 3)
 
 data class MemoItem(val id: String, val toiletId: String, val uid: String, val nick: String, val text: String, val at: Long)
 
