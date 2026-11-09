@@ -103,6 +103,7 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs(this)
         fused = LocationServices.getFusedLocationProviderClient(this)
         buildUi()
+        CrashLog.take(this)?.let { showCrash(it) }
         startMap()
         if (hasLoc()) startLocation() else permLauncher.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -231,6 +232,27 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- 지도 ----------------
 
+    /** 지난번에 앱이 꺼진 이유를 보여 주고 복사할 수 있게 함 */
+    private fun showCrash(text: String) {
+        val tv = TextView(this).apply {
+            this.text = text
+            textSize = 11f
+            setTextIsSelectable(true)
+            setPadding(40, 20, 40, 20)
+        }
+        val scroll = android.widget.ScrollView(this).apply { addView(tv) }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("지난번에 앱이 꺼진 이유")
+            .setView(scroll)
+            .setPositiveButton("복사") { _, _ ->
+                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("crash", text))
+                toast("복사했어요. Claude에게 붙여 주세요")
+            }
+            .setNegativeButton("닫기", null)
+            .show()
+    }
+
     private fun showMapError(msg: String) {
         hint.text = msg
         hint.setTextColor(C.RED_TEXT)
@@ -251,7 +273,11 @@ class MainActivity : AppCompatActivity() {
         }, object : KakaoMapReadyCallback() {
             override fun onMapReady(kakaoMap: KakaoMap) {
                 map = kakaoMap
-                onMapReady(kakaoMap)
+                try {
+                    onMapReady(kakaoMap)
+                } catch (e: Exception) {
+                    showMapError("지도 준비 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+                }
             }
 
             override fun getPosition(): LatLng = LatLng.from(myLat ?: 37.5665, myLon ?: 126.9780)
@@ -305,8 +331,13 @@ class MainActivity : AppCompatActivity() {
     private var publicJob: kotlinx.coroutines.Job? = null
 
     fun onCameraEnd() {
-        computeRadius()
-        drawToilets()
+        try {
+            computeRadius()
+            drawToilets()
+        } catch (e: Exception) {
+            showMapError("화장실 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+            return
+        }
         if (!prefs.showPublic) { publics = emptyList(); drawToilets(); return }
         publicJob?.cancel()
         publicJob = lifecycleScope.launch {
@@ -323,7 +354,9 @@ class MainActivity : AppCompatActivity() {
                 if (need.isNotEmpty()) busy(false)
             }
             publics = out
-            drawToilets()
+            try { drawToilets() } catch (e: Exception) {
+                showMapError("화장실 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+            }
         }
     }
 
@@ -392,7 +425,9 @@ class MainActivity : AppCompatActivity() {
             val l = r.lastLocation ?: return
             val first = myLat == null
             myLat = l.latitude; myLon = l.longitude
-            updateMe()
+            try { updateMe() } catch (e: Exception) {
+                showMapError("내 위치 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+            }
             if (first) move(l.latitude, l.longitude, 16)
             else if (following) move(l.latitude, l.longitude)
         }
