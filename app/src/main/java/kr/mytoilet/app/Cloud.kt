@@ -152,6 +152,11 @@ object Cloud {
         db.collection("groups").document(gid).update("subs", if (on) FieldValue.arrayUnion(who) else FieldValue.arrayRemove(who)).await()
     }
 
+    /** 방장 넘기기 (방장만): 넘겨받는 사람이 부방장이었으면 부방장에서 빠짐, 나는 일반 멤버 */
+    suspend fun transferOwner(gid: String, to: String) {
+        db.collection("groups").document(gid).update(mapOf("owner" to to, "subs" to FieldValue.arrayRemove(to))).await()
+    }
+
     /** 초대 코드 새로 만들기 (방장만) */
     suspend fun newGroupCode(gid: String): String {
         val c = newCode()
@@ -169,8 +174,10 @@ object Cloud {
     }
 
     suspend fun deleteGroup(id: String) {
-        val tl = db.collection("groups").document(id).collection("toilets").get().await()
-        for (d in tl.documents) d.reference.delete().await()
+        for (sub in listOf("toilets", "requests")) {
+            val tl = db.collection("groups").document(id).collection(sub).get().await()
+            for (d in tl.documents) d.reference.delete().await()
+        }
         db.collection("groups").document(id).delete().await()
     }
 
@@ -343,33 +350,9 @@ object Cloud {
         return db.collection("users").whereGreaterThan("lastSeen", start).count().get(AggregateSource.SERVER).await().count
     }
 
-    suspend fun publicMeta(): Map<String, Any?> =
-        db.collection("config").document("public").get().await().data ?: emptyMap()
 
-    suspend fun setPublicMeta(m: Map<String, Any>) {
-        db.collection("config").document("public").set(m, SetOptions.merge()).await()
-    }
 
-    @Suppress("UNCHECKED_CAST")
-    suspend fun allPublicCells(): Map<String, List<PublicToilet>> =
-        db.collection("publicCells").get().await().documents.associate { d ->
-            d.id to ((d.get("items") as? List<Map<String, Any?>>)?.map { PublicToilet.fromMap(it) } ?: emptyList())
-        }
 
-    suspend fun writeCells(cells: Map<String, List<PublicToilet>>, removed: Set<String>) {
-        var batch = db.batch()
-        var n = 0
-        for ((id, items) in cells) {
-            batch.set(db.collection("publicCells").document(id), mapOf("items" to items.map { it.toMap() }))
-            if (++n % 400 == 0) { batch.commit().await(); batch = db.batch() }
-        }
-        for (id in removed) {
-            batch.delete(db.collection("publicCells").document(id))
-            if (++n % 400 == 0) { batch.commit().await(); batch = db.batch() }
-        }
-        batch.commit().await()
-        cellCache.clear()
-    }
 
     data class Report(val id: String, val memoId: String, val text: String, val at: Long)
 
@@ -395,6 +378,10 @@ object Cloud {
         for (g in myGroups()) {
             if (g.owner == u) deleteGroup(g.id) else leaveGroup(g.id)
         }
+        // 문의 기록
+        val inq = db.collection("inquiries").document(u)
+        for (d in inq.collection("messages").get().await().documents) d.reference.delete().await()
+        inq.delete().await()
         db.collection("users").document(u).delete().await()
     }
 }

@@ -168,6 +168,9 @@ class Prefs(ctx: Context) {
     var fGroup: Boolean
         get() = p.getBoolean("fGroup", true)
         set(v) = p.edit().putBoolean("fGroup", v).apply()
+    var fPublic: Boolean
+        get() = p.getBoolean("fPublic", true)
+        set(v) = p.edit().putBoolean("fPublic", v).apply()
     var fPartner: Boolean
         get() = p.getBoolean("fPartner", true)
         set(v) = p.edit().putBoolean("fPartner", v).apply()

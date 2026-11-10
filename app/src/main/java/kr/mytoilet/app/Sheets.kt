@@ -336,6 +336,11 @@ object Sheets {
                             a.lifecycleScope.launch { try { Cloud.setSub(g.id, u, !sub); reload() } catch (e: Exception) { a.toast("실패: ${e.message}") } }
                         })
                     }
+                    if (isOwner && u != g.owner) mr.add(a.btn("방장 넘기기") {
+                        a.confirm("방장을 넘길까요?", "${g.nameOf(u)}님이 '${g.name}'의 새 방장이 되고, 나는 일반 멤버가 돼요.", "넘기기", true) {
+                            a.lifecycleScope.launch { try { Cloud.transferOwner(g.id, u); a.toast("${g.nameOf(u)}님이 방장이 됐어요"); reload(); a.reloadMine() } catch (e: Exception) { a.toast("실패: ${e.message}") } }
+                        }
+                    })
                     // 방장은 누구나(본인 빼고), 부방장은 일반 멤버만 내보내기
                     val canKick = u != me && u != g.owner && (isOwner || (g.isSub(me) && u !in g.subs))
                     if (canKick) mr.add(a.btn("내보내기", C.RED_BG, C.RED_TEXT) {
@@ -735,7 +740,7 @@ object Sheets {
 
         fill(emptyList())
         s.show()
-        if (!a.prefs.showPublic) { loading.visibility = View.GONE; return }
+        if (!a.showPublic) { loading.visibility = View.GONE; return }
         a.lifecycleScope.launch {
             val pubs = ArrayList<PublicToilet>()
             try {
@@ -1233,81 +1238,11 @@ object Sheets {
         stat("최근 24시간 접속", safe { Cloud.activeToday() }())
         stat("그룹 수", safe { Cloud.count("groups") }())
         stat("사용자 메모", safe { Cloud.count("memos") }())
-        val meta = try { Cloud.publicMeta() } catch (e: Exception) { emptyMap() }
-        stat("공중화장실", (meta["count"] as? Number)?.toString() ?: "아직 없음")
-        stat("마지막 공중화장실 업데이트", (meta["updatedAt"] as? Number)?.let { Geo.ago(it.toLong()) } ?: "-")
+        stat("공중화장실 데이터", "매달 1일 자동 갱신 (GitHub)")
         box.add(grid)
         box.add(a.btn("서버 사용량 보기 (Firebase)") {
             a.open("https://console.firebase.google.com/project/my-toilet-ce481/usage")
         })
-
-        // 공중화장실 업데이트
-        box.add(a.text("공중화장실 데이터", 12f, C.TEXT2, 600))
-        val (ub, urlField) = a.field("API 주소", PublicApi.DEFAULT_URL, (meta["apiUrl"] as? String) ?: PublicApi.DEFAULT_URL)
-        box.add(ub)
-        val out = a.text("", 13f, C.TEXT2).apply { setTextIsSelectable(true) }
-        val apply = a.vbox(8)
-        val row = a.hbox(8)
-        row.add(a.btn("응답 미리보기") {
-            a.lifecycleScope.launch {
-                a.busy(true)
-                try {
-                    val raw = PublicApi.fetchRaw(urlField.text.toString().trim(), 1, 3)
-                    val parsed = try {
-                        val j: Any = if (raw.trim().startsWith("[")) org.json.JSONArray(raw) else org.json.JSONObject(raw)
-                        PublicApi.findItems(j)?.optJSONObject(0)?.let { PublicApi.parse(it) }
-                    } catch (e: Exception) { null }
-                    out.text = (if (parsed != null) "✅ 읽기 성공: ${parsed.name} (${parsed.lat}, ${parsed.lon}) ${parsed.flags}\n\n" else "⚠ 항목을 못 읽었어요\n\n") + raw.take(1500)
-                } catch (e: Exception) {
-                    out.text = "실패: ${e.message}"
-                } finally { a.busy(false) }
-            }
-        }, 1f)
-        row.add(a.primaryBtn("새 데이터 확인") {
-            apply.removeAllViews()
-            a.lifecycleScope.launch {
-                a.busy(true)
-                val url = urlField.text.toString().trim()
-                try {
-                    out.text = "받는 중…"
-                    val list = PublicApi.fetchAll(url) { n, total -> out.text = "받는 중… $n" + if (total > 0) " / $total" else "" }
-                    if (list.isEmpty()) { out.text = "받은 화장실이 없어요. 응답 미리보기로 확인해 주세요"; return@launch }
-                    out.text = "서버 데이터와 비교 중…"
-                    val old = Cloud.allPublicCells()
-                    val oldById = old.values.flatten().associateBy { it.id }
-                    val newById = list.associateBy { it.id }
-                    val added = newById.keys.count { it !in oldById }
-                    val removed = oldById.keys.count { it !in newById }
-                    val changed = newById.count { (id, p) -> oldById[id]?.let { it != p } ?: false }
-                    val newCells = list.groupBy { Geo.cell(it.lat, it.lon) }
-                    val changedCells = newCells.filter { (id, items) -> old[id]?.toSet() != items.toSet() }
-                    val removedCells = old.keys - newCells.keys
-                    out.text = "전체 ${list.size}곳\n새로 생긴 곳 ${added}곳 · 바뀐 곳 ${changed}곳 · 없어진 곳 ${removed}곳"
-                    if (changedCells.isEmpty() && removedCells.isEmpty()) {
-                        apply.add(a.text("업데이트할 게 없어요 ✅", 14f, C.GREEN_TEXT, 700))
-                        Cloud.setPublicMeta(mapOf("count" to list.size, "updatedAt" to System.currentTimeMillis(), "apiUrl" to url))
-                    } else {
-                        apply.add(a.primaryBtn("서버에 반영하기 (${changedCells.size + removedCells.size}칸)") {
-                            a.lifecycleScope.launch {
-                                a.busy(true)
-                                try {
-                                    Cloud.writeCells(changedCells, removedCells)
-                                    Cloud.setPublicMeta(mapOf("count" to list.size, "updatedAt" to System.currentTimeMillis(), "apiUrl" to url))
-                                    apply.removeAllViews()
-                                    apply.add(a.text("반영했어요 ✅ 사용자 지도에 바로 보여요", 14f, C.GREEN_TEXT, 700))
-                                    a.onCameraEnd()
-                                } catch (e: Exception) { a.toast("실패: ${e.message}") } finally { a.busy(false) }
-                            }
-                        })
-                    }
-                } catch (e: Exception) {
-                    out.text = "실패: ${e.message}"
-                } finally { a.busy(false) }
-            }
-        }, 1f)
-        box.add(row)
-        box.add(out)
-        box.add(apply)
 
         // 신고된 메모
         box.add(a.text("신고된 메모", 12f, C.TEXT2, 600))

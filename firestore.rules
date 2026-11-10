@@ -72,6 +72,10 @@ service cloud.firestore {
         || (request.auth.uid in resource.data.members
           && changed().hasOnly(['names'])
           && request.resource.data.names.diff('names' in resource.data ? resource.data.names : {}).affectedKeys().hasOnly([request.auth.uid]))
+        // 방장 넘기기: 방장이 그룹 멤버에게만
+        || (resource.data.owner == request.auth.uid
+          && changed().hasOnly(['owner', 'subs'])
+          && request.resource.data.owner in resource.data.members)
         // 총관리자: 최대 인원만
         || (isAdmin() && changed().hasOnly(['maxMembers']))
       );
@@ -129,7 +133,7 @@ service cloud.firestore {
           && request.resource.data.text is string && request.resource.data.text.size() <= 1000
           && ((request.auth.uid == uid && request.resource.data.from == 'user')
               || (isAdmin() && request.resource.data.from == 'admin'));
-        allow delete: if isAdmin();
+        allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
       }
     }
 

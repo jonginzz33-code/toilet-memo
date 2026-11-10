@@ -68,6 +68,8 @@ class MainActivity : AppCompatActivity() {
     val showMine get() = !isAdmin || prefs.fMine
     val showGroup get() = !isAdmin || prefs.fGroup
     val showPartner get() = !isAdmin || prefs.fPartner
+    /** 공중화장실: 관리자 화면이면 퀵바 '공공', 아니면 메뉴의 '공중화장실 보기' */
+    val showPublic get() = if (isAdmin) prefs.fPublic else prefs.showPublic
 
     /** 관리자 퀵바 다시 그리기 */
     fun refreshQuickBar() {
@@ -80,21 +82,21 @@ class MainActivity : AppCompatActivity() {
         quickBar.removeAllViews()
         quickBar.visibility = if (isAdmin) View.VISIBLE else View.GONE
         if (!isAdmin) return
-        val all = prefs.fMine && prefs.fGroup && prefs.showPublic && prefs.fPartner
+        val all = prefs.fMine && prefs.fGroup && prefs.fPublic && prefs.fPartner
         fun chipOf(label: String, on: Boolean, color: Int, click: () -> Unit) {
             quickBar.add(text(label, 12f, if (on) Color.WHITE else C.TEXT3, 800, Gravity.CENTER).apply {
                 background = if (on) round(color, 14f) else round(Color.WHITE, 14f, 1, 0xFFDDDDDD.toInt())
                 setPadding(dp(9), dp(4), dp(9), dp(4))
-                setOnClickListener { click(); refreshQuickBar(); drawToilets(); if (prefs.showPublic) onCameraEnd() }
+                setOnClickListener { click(); refreshQuickBar(); drawToilets(); onCameraEnd() }
             })
         }
         chipOf("전체", all, C.CAR) {
             val v = !all
-            prefs.fMine = v; prefs.fGroup = v; prefs.showPublic = v; prefs.fPartner = v
+            prefs.fMine = v; prefs.fGroup = v; prefs.fPublic = v; prefs.fPartner = v
         }
         chipOf("내 것", prefs.fMine, C.ORANGE) { prefs.fMine = !prefs.fMine }
         chipOf("그룹", prefs.fGroup, C.PURPLE) { prefs.fGroup = !prefs.fGroup }
-        chipOf("공공", prefs.showPublic, C.GRAY) { prefs.showPublic = !prefs.showPublic }
+        chipOf("공공", prefs.fPublic, C.GRAY) { prefs.fPublic = !prefs.fPublic }
         chipOf("제휴", prefs.fPartner, C.GREEN) { prefs.fPartner = !prefs.fPartner }
     }
     /** 위젯 '길찾기'로 열렸을 때: 위치·지도가 준비되면 차량/도보 고르기 창 */
@@ -482,7 +484,7 @@ class MainActivity : AppCompatActivity() {
             showMapError("화장실 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
             return
         }
-        if (!prefs.showPublic) { publics = emptyList(); drawToilets(); return }
+        if (!showPublic) { publics = emptyList(); drawToilets(); return }
         publicJob?.cancel()
         publicJob = lifecycleScope.launch {
             val (lat, lon) = center()
@@ -725,7 +727,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             busy(true)
             val pubs = ArrayList<PublicToilet>()
-            if (prefs.showPublic) try {
+            if (showPublic) try {
                 for (c in Geo.cellsAround(lat, lon, 2000.0)) pubs.addAll(Cloud.publicCell(c))
             } catch (_: Exception) {}
             busy(false)
