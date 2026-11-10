@@ -1,0 +1,1 @@
+Source: https://github.com/DietrichGebert/ponytail (commit 96608e0, MIT). Only the SKILL.md instruction files are copied; hooks are not installed.
