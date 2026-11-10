@@ -15,12 +15,12 @@ val buildNumber: Int = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0) 
 
 android {
     namespace = "kr.mytoilet.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "kr.mytoilet.app"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = buildNumber
         versionName = readmeVersion
         // 키는 gradle.properties의 kakaoKey가 있으면 그걸 쓰고, 없으면 GitHub 비밀값 KAKAO_KEY를 써요
