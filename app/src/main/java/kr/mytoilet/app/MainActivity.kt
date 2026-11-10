@@ -106,6 +106,69 @@ class MainActivity : AppCompatActivity() {
     private var routeTarget: Triple<Double, Double, String>? = null
     private var routeCar = false
     private lateinit var routeKakaoBtn: TextView
+
+    // ---------- 내비처럼 내가 보는 방향으로 지도 돌리기 (길찾기 중에만) ----------
+    private lateinit var headingBtn: TextView
+    private var headingOn = false
+    private var heading = 0f              // 지금 방향 (도, 북쪽 0 · 시계 방향)
+    private var lastRotateAt = 0L
+    private var lastRotated = 999f
+    private var gpsBearingAt = 0L          // GPS 이동 방향을 쓴 시각 (움직일 땐 나침반보다 GPS 우선)
+    private val sensorManager by lazy { getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager }
+    private val rotMatrix = FloatArray(9)
+    private val orient = FloatArray(3)
+    private val compass = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(e: android.hardware.SensorEvent) {
+            if (System.currentTimeMillis() - gpsBearingAt < 3000) return
+            android.hardware.SensorManager.getRotationMatrixFromVector(rotMatrix, e.values)
+            android.hardware.SensorManager.getOrientation(rotMatrix, orient)
+            var deg = Math.toDegrees(orient[0].toDouble()).toFloat()
+            // 화면이 가로면 보정
+            deg += when (windowManager.defaultDisplay.rotation) { android.view.Surface.ROTATION_90 -> 90f; android.view.Surface.ROTATION_270 -> -90f; else -> 0f }
+            applyHeading(deg)
+        }
+        override fun onAccuracyChanged(s: android.hardware.Sensor?, a: Int) {}
+    }
+
+    /** 부드럽게 따라가며, 너무 자주 돌리지 않음 (0.25초마다, 4도 넘게 바뀔 때만) */
+    private fun applyHeading(deg: Float) {
+        val target = ((deg % 360) + 360) % 360
+        var diff = target - heading
+        if (diff > 180) diff -= 360
+        if (diff < -180) diff += 360
+        heading = ((heading + diff * 0.25f) % 360 + 360) % 360
+        val now = System.currentTimeMillis()
+        var moved = heading - lastRotated
+        if (moved > 180) moved -= 360
+        if (moved < -180) moved += 360
+        if (now - lastRotateAt < 250 || Math.abs(moved) < 4f) return
+        lastRotateAt = now; lastRotated = heading
+        val m = map ?: return
+        lastProgMove = now
+        try { m.moveCamera(CameraUpdateFactory.rotateTo(Math.toRadians(heading.toDouble()))) } catch (_: Exception) {}
+    }
+
+    private fun setHeading(on: Boolean) {
+        headingOn = on
+        if (::headingBtn.isInitialized) {
+            headingBtn.background = if (on) round(C.BLUE, 12f) else glass(12f)
+            headingBtn.setTextColor(if (on) Color.WHITE else C.TEXT)
+        }
+        val m = map
+        if (on) {
+            val s = sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)
+            if (s != null) sensorManager.registerListener(compass, s, android.hardware.SensorManager.SENSOR_DELAY_UI)
+            setFollow(true)
+            lastProgMove = System.currentTimeMillis()
+            try { m?.moveCamera(CameraUpdateFactory.tiltTo(Math.toRadians(40.0))) } catch (_: Exception) {}
+            myLat?.let { la -> myLon?.let { lo -> move(la, lo, 17) } }
+        } else {
+            sensorManager.unregisterListener(compass)
+            lastProgMove = System.currentTimeMillis()
+            lastRotated = 999f
+            try { m?.moveCamera(CameraUpdateFactory.rotateTo(0.0)); m?.moveCamera(CameraUpdateFactory.tiltTo(0.0)) } catch (_: Exception) {}
+        }
+    }
     private lateinit var hint: TextView
     private lateinit var followBtn: ImageView
     private lateinit var loading: LinearProgressIndicator
@@ -334,6 +397,8 @@ class MainActivity : AppCompatActivity() {
         routeBar.add(routeInfo)
         val rb = hbox(8)
         rb.add(btn("✕ 길 지우기", C.GLASS) { clearRoute() }, 1f)
+        headingBtn = btn("🧭 방향", C.GLASS) { setHeading(!headingOn) }
+        rb.add(headingBtn)
         routeKakaoBtn = btn("카카오맵으로 안내", C.BLUE, Color.WHITE) {
             routeTarget?.let { (la, lo, n) ->
                 val app = Uri.parse("kakaomap://route?sp=${myLat},${myLon}&ep=$la,$lo&by=${if (routeCar) "CAR" else "FOOT"}")
@@ -638,6 +703,10 @@ class MainActivity : AppCompatActivity() {
             val first = myLat == null
             myLat = l.latitude; myLon = l.longitude
             if (first) tryPendingRoute()
+            if (headingOn && l.hasBearing() && l.hasSpeed() && l.speed > 1.5f) {
+                gpsBearingAt = System.currentTimeMillis()
+                applyHeading(l.bearing)
+            }
             try { updateMe() } catch (e: Exception) {
                 showMapError("내 위치 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
             }
@@ -815,6 +884,8 @@ class MainActivity : AppCompatActivity() {
                 routeLine = layer.addRouteLine(com.kakao.vectormap.route.RouteLineOptions.from(seg).setStylesSet(styles))
                 lastProgMove = System.currentTimeMillis()
                 m.moveCamera(CameraUpdateFactory.fitMapPoints(pts.map { LatLng.from(it.first, it.second) }.toTypedArray(), dp(80)))
+                // 전체 길을 잠깐 보여 준 뒤, 내비처럼 내가 보는 방향으로
+                handler.postDelayed({ if (routeTarget != null) setHeading(true) }, 1800)
             } catch (e: Exception) {
                 showMapError("길을 그리지 못했어요\n${e.message}")
             }
@@ -827,6 +898,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun clearRoute() {
+        if (headingOn) setHeading(false)
         routeLine?.let { l -> try { map?.routeLineManager?.layer?.remove(l) } catch (_: Exception) {} }
         routeLine = null
         routeTarget = null
@@ -1088,10 +1160,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         mapView.resume()
+        if (headingOn) sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)?.let {
+            sensorManager.registerListener(compass, it, android.hardware.SensorManager.SENSOR_DELAY_UI)
+        }
     }
 
     override fun onPause() {
         super.onPause()
+        if (headingOn) sensorManager.unregisterListener(compass)
         mapView.pause()
     }
 
