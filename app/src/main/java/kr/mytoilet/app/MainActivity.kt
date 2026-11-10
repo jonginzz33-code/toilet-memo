@@ -159,6 +159,7 @@ class MainActivity : AppCompatActivity() {
 
     suspend fun reloadPartners() {
         partners = try { Partners.all() } catch (e: Exception) { if (isAdmin) toast("제휴 업체를 못 불러왔어요: ${e.message}"); partners }
+        updateWidget()
         drawToilets()
     }
 
@@ -753,7 +754,7 @@ class MainActivity : AppCompatActivity() {
 
     /** 위젯용 내 화장실 목록 저장 (거리는 위젯 '새로고침' 때만 계산) */
     fun updateWidget() {
-        NearestWidget.saveList(this, (mine + groupToilets).distinctBy { it.id })
+        NearestWidget.saveList(this, (mine + groupToilets).distinctBy { it.id }, partners)
     }
 
     private fun takeRouteIntent(i: Intent?) {
