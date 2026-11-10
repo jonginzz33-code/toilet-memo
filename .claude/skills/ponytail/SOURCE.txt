@@ -1,1 +1,3 @@
-Source: https://github.com/DietrichGebert/ponytail (commit 96608e0, MIT). Only the SKILL.md instruction files are copied; hooks are not installed.
+Source: https://github.com/DietrichGebert/ponytail (commit 96608e0, MIT).
+Installed: skills (.claude/skills/ponytail*) + hooks (.claude/hooks/ponytail-*, wired in .claude/settings.json).
+Not installed: band (stats board UI) and ponytail-band-import.js.
