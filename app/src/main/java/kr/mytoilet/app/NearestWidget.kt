@@ -25,6 +25,12 @@ import kotlinx.coroutines.launch
  */
 class NearestWidget : AppWidgetProvider() {
 
+    /** 앱을 업데이트하면 위젯을 새 모양으로 다시 그림 (안 하면 빈 칸으로 남음) */
+    override fun onReceive(ctx: Context, intent: Intent) {
+        super.onReceive(ctx, intent)
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) redraw(ctx)
+    }
+
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
         for (id in ids) mgr.updateAppWidget(id, views(ctx))
     }
@@ -48,6 +54,7 @@ class NearestWidget : AppWidgetProvider() {
             }
             ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
                 .putString("list", arr.toString()).putString("plist", parr.toString()).apply()
+            redraw(ctx)
         }
 
         /** 지금 위치로 두 칸(내 화장실 / 공중화장실·제휴) 다시 계산 */
@@ -127,13 +134,14 @@ class NearestWidget : AppWidgetProvider() {
             card("p", R.id.w_p_name, R.id.w_p_sub, R.id.w_p_pw, R.id.w_p_go, 3)
             card("t", R.id.w_t_name, R.id.w_t_sub, R.id.w_t_pw, R.id.w_t_go, 4)
 
-            v.setOnClickPendingIntent(R.id.w_root, PendingIntent.getActivity(
-                ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-            // 새로고침: 화면 없는 짧은 창이 위치를 한 번 받아서 계산하고 바로 닫힘
-            v.setOnClickPendingIntent(R.id.w_refresh, PendingIntent.getActivity(
-                ctx, 2, Intent(ctx, WidgetRefreshActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            // 새로고침: 화면 없는 짧은 창이 위치를 한 번 받아서 계산하고 바로 닫힘.
+            // 위젯 아무 곳이나 눌러도 새로고침 (앱은 '어플에서 길찾기'를 누를 때만 열림)
+            val refresh = PendingIntent.getActivity(
+                ctx, 2, Intent(ctx, WidgetRefreshActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            v.setOnClickPendingIntent(R.id.w_root, refresh)
+            v.setOnClickPendingIntent(R.id.w_refresh, refresh)
             return v
         }
     }
@@ -155,6 +163,7 @@ class WidgetRefreshActivity : Activity() {
             .addOnSuccessListener { l ->
                 if (l == null) {
                     Toast.makeText(this, "위치를 못 찾았어요. GPS를 켜 주세요", Toast.LENGTH_SHORT).show()
+                    NearestWidget.redraw(applicationContext)
                     finish(); return@addOnSuccessListener
                 }
                 val app = applicationContext
@@ -164,6 +173,6 @@ class WidgetRefreshActivity : Activity() {
                 }
                 finish()
             }
-            .addOnFailureListener { finish() }
+            .addOnFailureListener { NearestWidget.redraw(applicationContext); finish() }
     }
 }
