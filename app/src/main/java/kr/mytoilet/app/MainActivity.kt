@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var urgentBtn: TextView
     private lateinit var quickBar: LinearLayout
     /** 반경이 이보다 넓으면 숫자 동그라미로 묶어서 보여 줌 */
-    private val CLUSTER_M = 1500.0
+    private val CLUSTER_M = 300.0
     private lateinit var adminSwitch: TextView
 
     // 지도에 보일 종류 (관리자 퀵바로 바꿈. 일반 사용자는 공중화장실 스위치만)
@@ -596,7 +596,7 @@ class MainActivity : AppCompatActivity() {
             labelTargets[id] = target
         }
 
-        // 넓게 볼 때(반경 1.5km 넘음): 가까운 것끼리 종류별 숫자 동그라미로 묶기
+        // 넓게 볼 때(반경 300m 넘음): 가까운 것끼리 종류별 숫자 동그라미로 묶기
         if (radiusM > CLUSTER_M) {
             drawClusters(layer, clat, clon, limit)
             return
