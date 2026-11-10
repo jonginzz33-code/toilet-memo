@@ -19,7 +19,7 @@ import org.json.JSONObject
 import kotlinx.coroutines.launch
 
 /**
- * 홈 화면 위젯: 가장 가까운 내 화장실 + 비밀번호.
+ * 홈 화면 위젯: 가장 가까운 내 화장실(비밀번호) / 공중화장실 / 제휴 가게 세 칸.
  * 자동으로 위치를 불러오지 않고, 오른쪽 위 '새로고침'을 누를 때만 지금 위치로 다시 계산함.
  * '앱 열기'를 누르면 앱이 열리면서 차량/도보 길찾기 고르는 창이 뜸.
  */
@@ -65,24 +65,23 @@ class NearestWidget : AppWidgetProvider() {
                 .putString("m_pw", mine.optString("w"))
                 .putFloat("m_y", mine.getDouble("y").toFloat()).putFloat("m_x", mine.getDouble("x").toFloat())
 
-            // 공중화장실 (2km 안) vs 제휴 가게 중 더 가까운 곳
+            // 공중화장실 (2km 안)
             val pubs = ArrayList<PublicToilet>()
             try { for (c in Geo.cellsAround(lat, lon, 2000.0)) pubs.addAll(PublicData.cell(c)) } catch (_: Exception) {}
-            val pub = pubs.minByOrNull { Geo.dist(lat, lon, it.lat, it.lon) }
-            val partner = arr("plist").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.minByOrNull { dist(it) }
-            val pd = pub?.let { Geo.dist(lat, lon, it.lat, it.lon) } ?: Double.MAX_VALUE
-            val ptd = partner?.let { dist(it) } ?: Double.MAX_VALUE
-            when {
-                partner != null && ptd <= pd -> e.putString("p_name", partner.getString("n")).putBoolean("p_partner", true)
-                    .putString("p_sub", Geo.fmt(ptd) + partner.optString("o").let { if (it.isBlank()) "" else " · $it" })
-                    .putString("p_pw", partner.optString("w").ifBlank { "비밀번호 없음" })
-                    .putFloat("p_y", partner.getDouble("y").toFloat()).putFloat("p_x", partner.getDouble("x").toFloat())
-                pub != null -> e.putString("p_name", pub.name).putBoolean("p_partner", false)
-                    .putString("p_sub", Geo.fmt(pd) + if (pub.open.isBlank()) "" else " · ${pub.open}")
-                    .putString("p_pw", "비밀번호 없음")
-                    .putFloat("p_y", pub.lat.toFloat()).putFloat("p_x", pub.lon.toFloat())
-                else -> e.remove("p_name")
-            }
+            val pub = pubs.minByOrNull { Geo.dist(lat, lon, it.lat, it.lon) }?.takeIf { Geo.dist(lat, lon, it.lat, it.lon) <= 2000 }
+            if (pub == null) e.remove("p_name")
+            else e.putString("p_name", pub.name)
+                .putString("p_sub", Geo.fmt(Geo.dist(lat, lon, pub.lat, pub.lon)) + if (pub.open.isBlank()) "" else " · ${pub.open}")
+                .putString("p_pw", "비밀번호 없음")
+                .putFloat("p_y", pub.lat.toFloat()).putFloat("p_x", pub.lon.toFloat())
+
+            // 제휴 가게 (2km 안)
+            val partner = arr("plist").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.minByOrNull { dist(it) }?.takeIf { dist(it) <= 2000 }
+            if (partner == null) e.remove("t_name")
+            else e.putString("t_name", partner.getString("n"))
+                .putString("t_sub", Geo.fmt(dist(partner)) + partner.optString("o").let { if (it.isBlank()) "" else " · $it" })
+                .putString("t_pw", partner.optString("w").ifBlank { "비밀번호 없음" })
+                .putFloat("t_y", partner.getDouble("y").toFloat()).putFloat("t_x", partner.getDouble("x").toFloat())
             e.apply()
             redraw(ctx)
         }
@@ -116,17 +115,17 @@ class NearestWidget : AppWidgetProvider() {
             v.setViewVisibility(R.id.w_m_go, if (mName != null) View.VISIBLE else View.GONE)
             if (mName != null) v.setOnClickPendingIntent(R.id.w_m_go, routeIntent(ctx, 1, p.getFloat("m_y", 0f), p.getFloat("m_x", 0f), mName))
 
-            // 공중화장실·제휴 칸
-            val pName = p.getString("p_name", null)
-            val partner = p.getBoolean("p_partner", false)
-            v.setTextViewText(R.id.w_p_tag, if (partner) "🤝 제휴" else "🚻 공중화장실")
-            v.setInt(R.id.w_p_tag, "setBackgroundResource", if (partner) R.drawable.widget_tag_green else R.drawable.widget_tag_gray)
-            v.setInt(R.id.w_pub, "setBackgroundResource", if (partner) R.drawable.widget_card_partner else R.drawable.widget_card_pub)
-            v.setTextViewText(R.id.w_p_name, pName ?: if (at == 0L) "⟳ 새로고침" else "2km 안에 없음")
-            v.setTextViewText(R.id.w_p_sub, if (pName != null) p.getString("p_sub", "") else "")
-            v.setTextViewText(R.id.w_p_pw, if (pName != null) p.getString("p_pw", "") else "")
-            v.setViewVisibility(R.id.w_p_go, if (pName != null) View.VISIBLE else View.GONE)
-            if (pName != null) v.setOnClickPendingIntent(R.id.w_p_go, routeIntent(ctx, 3, p.getFloat("p_y", 0f), p.getFloat("p_x", 0f), pName))
+            // 공중 칸·제휴 칸
+            fun card(prefix: String, nameId: Int, subId: Int, pwId: Int, goId: Int, code: Int) {
+                val n = p.getString("${prefix}_name", null)
+                v.setTextViewText(nameId, n ?: if (at == 0L) "⟳ 새로고침" else "2km 안에 없음")
+                v.setTextViewText(subId, if (n != null) p.getString("${prefix}_sub", "") else "")
+                v.setTextViewText(pwId, if (n != null) p.getString("${prefix}_pw", "") else "")
+                v.setViewVisibility(goId, if (n != null) View.VISIBLE else View.GONE)
+                if (n != null) v.setOnClickPendingIntent(goId, routeIntent(ctx, code, p.getFloat("${prefix}_y", 0f), p.getFloat("${prefix}_x", 0f), n))
+            }
+            card("p", R.id.w_p_name, R.id.w_p_sub, R.id.w_p_pw, R.id.w_p_go, 3)
+            card("t", R.id.w_t_name, R.id.w_t_sub, R.id.w_t_pw, R.id.w_t_go, 4)
 
             v.setOnClickPendingIntent(R.id.w_root, PendingIntent.getActivity(
                 ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
