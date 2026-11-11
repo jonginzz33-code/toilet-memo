@@ -17,6 +17,16 @@ object Sheets {
         if (t.scope == "group") a.chip("그룹 · ${t.groupName}", C.PURPLE_BG, C.PURPLE_TEXT)
         else a.chip("나만 보기", C.ORANGE_BG, C.ORANGE_TEXT)
 
+    /** 직선거리를 먼저 보여 주고, 걷는 길 거리·시간을 받으면 바꿔 줌 */
+    private fun walkDistInto(a: MainActivity, tv: TextView, lat: Double, lon: Double) {
+        val la = a.myLat ?: return
+        val lo = a.myLon ?: return
+        a.lifecycleScope.launch {
+            val r = try { Walk.route(la, lo, lat, lon) } catch (_: Exception) { null } ?: return@launch
+            tv.text = "🚶 ${Geo.fmt(r.meters)} · 약 ${(r.seconds / 60).toInt().coerceAtLeast(1)}분"
+        }
+    }
+
     private fun distText(a: MainActivity, lat: Double, lon: Double): String {
         val la = a.myLat ?: return ""
         val lo = a.myLon ?: return ""
@@ -30,7 +40,7 @@ object Sheets {
         val top = a.hbox(8)
         top.add(scopeChip(a, t))
         val d = distText(a, t.lat, t.lon)
-        if (d.isNotEmpty()) top.add(a.text(d, 13f, C.TEXT2))
+        if (d.isNotEmpty()) top.add(a.text("직선 $d", 13f, C.TEXT2).also { walkDistInto(a, it, t.lat, t.lon) })
         s.add(top)
         // 최근에 언제 갔는지(수정했는지) 맨 위에 크게
         val dateRow = a.hbox(8)
@@ -421,7 +431,7 @@ object Sheets {
         ht.add(a.text(p.name, 20f, C.TEXT, 700))
         val chips = a.hbox(6)
         chips.add(a.chip("🤝 제휴 개방화장실", C.GREEN_BG, C.GREEN_TEXT))
-        if (dist != null) chips.add(a.text(Geo.fmt(dist), 13f, C.TEXT2))
+        if (dist != null) chips.add(a.text("직선 ${Geo.fmt(dist)}", 13f, C.TEXT2).also { walkDistInto(a, it, p.lat, p.lon) })
         ht.add(chips)
         head.add(ht, 1f)
         s.add(head)
@@ -770,9 +780,9 @@ object Sheets {
             if (items.isEmpty()) box.add(a.text("근처에 화장실이 없어요.\n맨 위 '＋ 화장실 추가'로 저장해 보세요.", 15f, C.TEXT2))
             for ((x, d) in items.take(80)) {
                 when (x) {
-                    is Toilet -> box.add(row(x.title(), "${Geo.fmt(d)} · ${Geo.agoShort(x.updated)} · ${x.place.ifBlank { "위치 설명 없음" }}", scopeChip(a, x)) { toiletDetail(a, x) })
-                    is Partner -> box.add(row(x.name, "${Geo.fmt(d)} · ${x.rule.ifBlank { x.addr }}", a.chip("🤝 제휴", C.GREEN_BG, C.GREEN_TEXT)) { partnerDetail(a, x) })
-                    is PublicToilet -> box.add(row(x.name, "${Geo.fmt(d)} · ${x.addr.ifBlank { "공중화장실" }}", a.chip("공중화장실", C.GRAY_BG, C.TEXT2)) { publicDetail(a, x) })
+                    is Toilet -> box.add(row(x.title(), "직선 ${Geo.fmt(d)} · ${Geo.agoShort(x.updated)} · ${x.place.ifBlank { "위치 설명 없음" }}", scopeChip(a, x)) { toiletDetail(a, x) })
+                    is Partner -> box.add(row(x.name, "직선 ${Geo.fmt(d)} · ${x.rule.ifBlank { x.addr }}", a.chip("🤝 제휴", C.GREEN_BG, C.GREEN_TEXT)) { partnerDetail(a, x) })
+                    is PublicToilet -> box.add(row(x.name, "직선 ${Geo.fmt(d)} · ${x.addr.ifBlank { "공중화장실" }}", a.chip("공중화장실", C.GRAY_BG, C.TEXT2)) { publicDetail(a, x) })
                 }
             }
         }
@@ -794,8 +804,9 @@ object Sheets {
 
     fun publicDetail(a: MainActivity, p: PublicToilet) {
         val s = Sheet(a, p.name)
-        val info = listOf(distText(a, p.lat, p.lon), p.open.let { if (it.isBlank()) "" else "개방 $it" }).filter { it.isNotBlank() }
-        s.add(a.text(info.joinToString(" · ").ifBlank { "공중화장실" }, 14f, C.TEXT2))
+        val dt = distText(a, p.lat, p.lon)
+        if (dt.isNotEmpty()) s.add(a.text("직선 $dt", 14f, C.TEXT2).also { walkDistInto(a, it, p.lat, p.lon) })
+        if (p.open.isNotBlank()) s.add(a.text("개방 ${p.open}", 14f, C.TEXT2))
         if (p.addr.isNotBlank()) s.add(a.text(p.addr, 13f, C.TEXT3))
         val visitRow = a.hbox(8)
         val visitText = a.text("🕒 최근 다녀옴: 확인 중…", 14f, C.BLUE_TEXT, 700).apply {
