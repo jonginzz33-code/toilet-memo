@@ -1027,7 +1027,7 @@ object Sheets {
     // ---------------- 메뉴 ----------------
 
     fun menu(a: MainActivity) {
-        val s = Sheet(a, "메뉴")
+        val s = Sheet(a, "메뉴", half = true)
         // 계정
         val acc = a.vbox(8).apply {
             background = a.round(0xFFFFFFFF.toInt(), 16f)
