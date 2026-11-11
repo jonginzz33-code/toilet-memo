@@ -258,8 +258,7 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs(this)
         fused = LocationServices.getFusedLocationProviderClient(this)
         buildUi()
-        val crash = CrashLog.take(this)
-        if (crash != null) showCrash(crash) else startMap()
+        startMap()
         if (hasLoc()) startLocation() else permLauncher.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
@@ -432,28 +431,6 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- 지도 ----------------
 
-    /** 지난번에 앱이 꺼진 이유를 보여 주고 복사할 수 있게 함 */
-    private fun showCrash(text: String) {
-        val tv = TextView(this).apply {
-            this.text = text
-            textSize = 11f
-            setTextIsSelectable(true)
-            setPadding(40, 20, 40, 20)
-        }
-        val scroll = android.widget.ScrollView(this).apply { addView(tv) }
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("지난번에 앱이 꺼진 이유")
-            .setView(scroll)
-            .setPositiveButton("복사") { _, _ ->
-                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("crash", text))
-                toast("복사했어요. Claude에게 붙여 주세요")
-            }
-            .setNegativeButton("닫기", null)
-            .setOnDismissListener { startMap() } // 어느 버튼을 눌러도 지도는 켜기
-            .show()
-    }
-
     private fun showMapError(msg: String) {
         if (Looper.myLooper() != Looper.getMainLooper()) { runOnUiThread { showMapError(msg) }; return }
         hint.text = msg
@@ -470,7 +447,7 @@ class MainActivity : AppCompatActivity() {
         mapView.start(object : MapLifeCycleCallback() {
             override fun onMapDestroy() {}
             override fun onMapError(error: Exception) {
-                showMapError("지도를 열지 못했어요\n${error.message ?: error.javaClass.simpleName}")
+                showMapError("지도를 열지 못했어요. 인터넷 연결을 확인해 주세요")
             }
         }, object : KakaoMapReadyCallback() {
             override fun onMapReady(kakaoMap: KakaoMap) {
@@ -488,7 +465,7 @@ class MainActivity : AppCompatActivity() {
         try {
             setupMap(m)
         } catch (e: Exception) {
-            showMapError("지도 준비 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+            showMapError("지도 준비 중 오류")
         }
     }
 
@@ -548,7 +525,7 @@ class MainActivity : AppCompatActivity() {
             drawToilets()
             updateMe()
         } catch (e: Exception) {
-            showMapError("화장실 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+            showMapError("화장실 표시 중 오류")
             return
         }
         if (!showPublic) { publics = emptyList(); drawToilets(); return }
@@ -568,7 +545,7 @@ class MainActivity : AppCompatActivity() {
             }
             publics = out
             try { drawToilets() } catch (e: Exception) {
-                showMapError("화장실 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+                showMapError("화장실 표시 중 오류")
             }
         }
     }
@@ -709,7 +686,7 @@ class MainActivity : AppCompatActivity() {
                 applyHeading(l.bearing)
             }
             try { updateMe() } catch (e: Exception) {
-                showMapError("내 위치 표시 중 오류\n${e.javaClass.simpleName}: ${e.message}")
+                showMapError("내 위치 표시 중 오류")
             }
             if (first) move(l.latitude, l.longitude, 16)
             else if (following) move(l.latitude, l.longitude)
@@ -890,7 +867,7 @@ class MainActivity : AppCompatActivity() {
                 // 전체 길을 잠깐 보여 준 뒤, 내비처럼 내가 보는 방향으로
                 handler.postDelayed({ if (routeTarget != null) setHeading(true) }, 1800)
             } catch (e: Exception) {
-                showMapError("길을 그리지 못했어요\n${e.message}")
+                showMapError("길을 그리지 못했어요")
             }
             routeInfo.text = (if (car) "🚗 $name 까지 ${Geo.fmt(dist)} · 차로 약 ${min}분" else "🚶 $name 까지 ${Geo.fmt(dist)} · 걸어서 약 ${min}분") + if (r == null) "\n(길 정보를 못 받아 곧은 선으로 보여요)" else ""
             routeKakaoBtn.background = round(if (car) C.CAR else C.BLUE, 14f)

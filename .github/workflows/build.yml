@@ -58,11 +58,6 @@ jobs:
             echo "UPLOAD_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> $GITHUB_ENV
           fi
 
-      - name: Check keys (length only)
-        env:
-          KAKAO_KEY: ${{ secrets.KAKAO_KEY }}
-        run: echo "KAKAO_KEY length = ${#KAKAO_KEY}"
-
       - name: Build
         env:
           KAKAO_KEY: ${{ secrets.KAKAO_KEY }}
