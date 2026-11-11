@@ -114,6 +114,30 @@ class MainActivity : AppCompatActivity() {
     private var lastRotateAt = 0L
     private var lastRotated = 999f
     private var gpsBearingAt = 0L          // GPS 이동 방향을 쓴 시각 (움직일 땐 나침반보다 GPS 우선)
+    private var mapRotation = 0f           // 지금 지도가 돌아간 각도 (도)
+    private var coneLabel: Label? = null
+    private val coneStyles = HashMap<Int, LabelStyles>()   // 10도 단위로 그려 둔 부채꼴
+
+    /** 내 위치에 '보는 방향' 파란 부채꼴 (길찾기 중에만). 화면 기준 각도 = 방향 - 지도 회전 */
+    private fun updateCone() {
+        val m = map ?: return
+        val lat = myLat ?: return
+        val lon = myLon ?: return
+        val layer = m.labelManager?.layer ?: return
+        if (routeTarget == null) { removeCone(); return }
+        val step = ((((heading - mapRotation) % 360 + 360) % 360) / 10).toInt() % 36
+        val st = coneStyles.getOrPut(step) {
+            LabelStyles.from(LabelStyle.from(Icons.headingCone(this, step * 10f)).setAnchorPoint(0.5f, 0.5f))
+        }
+        val c = coneLabel
+        if (c == null) coneLabel = layer.addLabel(LabelOptions.from("cone", LatLng.from(lat, lon)).setStyles(st).setRank(0L))
+        else { c.moveTo(LatLng.from(lat, lon)); c.changeStyles(st) }
+    }
+
+    private fun removeCone() {
+        coneLabel?.let { l -> try { map?.labelManager?.layer?.remove(l) } catch (_: Exception) {} }
+        coneLabel = null
+    }
     private val sensorManager by lazy { getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager }
     private val rotMatrix = FloatArray(9)
     private val orient = FloatArray(3)
@@ -144,8 +168,12 @@ class MainActivity : AppCompatActivity() {
         if (now - lastRotateAt < 250 || Math.abs(moved) < 4f) return
         lastRotateAt = now; lastRotated = heading
         val m = map ?: return
-        lastProgMove = now
-        try { m.moveCamera(CameraUpdateFactory.rotateTo(Math.toRadians(heading.toDouble()))) } catch (_: Exception) {}
+        if (headingOn) {
+            lastProgMove = now
+            mapRotation = heading
+            try { m.moveCamera(CameraUpdateFactory.rotateTo(Math.toRadians(heading.toDouble()))) } catch (_: Exception) {}
+        }
+        updateCone()
     }
 
     private fun setHeading(on: Boolean) {
@@ -163,9 +191,10 @@ class MainActivity : AppCompatActivity() {
             try { m?.moveCamera(CameraUpdateFactory.tiltTo(Math.toRadians(40.0))) } catch (_: Exception) {}
             myLat?.let { la -> myLon?.let { lo -> move(la, lo, 17) } }
         } else {
-            sensorManager.unregisterListener(compass)
+            if (routeTarget == null) sensorManager.unregisterListener(compass)
             lastProgMove = System.currentTimeMillis()
             lastRotated = 999f
+            mapRotation = 0f
             try { m?.moveCamera(CameraUpdateFactory.rotateTo(0.0)); m?.moveCamera(CameraUpdateFactory.tiltTo(0.0)) } catch (_: Exception) {}
         }
     }
@@ -356,14 +385,22 @@ class MainActivity : AppCompatActivity() {
             elevation = dpf(4f)
             setOnClickListener { onClick() }
         }
-        fun gap() = rightCol.addView(View(this), LinearLayout.LayoutParams(1, dp(8)))
-        rightCol.addView(rbtn(R.drawable.ic_btn_search, "위치 검색") { searchPlace() }, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
-        rightCol.addView(rbtn(R.drawable.ic_btn_plus, "확대") { zoom(true) }, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
-        rightCol.addView(rbtn(R.drawable.ic_btn_minus, "축소") { zoom(false) }, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
-        rightCol.addView(rbtn(R.drawable.ic_btn_locate, "내 위치") { goToMe() }, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
+        // 버튼 아래 흰 알약 글자 (무슨 버튼인지 바로 알게)
+        fun add(btn: View, label: String) {
+            rightCol.addView(btn, LinearLayout.LayoutParams(dp(46), dp(46)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+            rightCol.addView(text(label, 11f, C.BLUE_DARK, 600, Gravity.CENTER).apply {
+                background = round(Color.WHITE, 99f)
+                elevation = dpf(2f)
+                setPadding(dp(7), dp(1), dp(7), dp(1))
+            }, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(3); bottomMargin = dp(7) })
+        }
+        add(rbtn(R.drawable.ic_btn_search, "위치 검색") { searchPlace() }, "검색")
+        add(rbtn(R.drawable.ic_btn_plus, "확대") { zoom(true) }, "확대")
+        add(rbtn(R.drawable.ic_btn_minus, "축소") { zoom(false) }, "축소")
+        add(rbtn(R.drawable.ic_btn_locate, "내 위치") { goToMe() }, "내 위치")
         followBtn = rbtn(R.drawable.ic_btn_follow, "따라가기") { setFollow(!following) }
-        rightCol.addView(followBtn, LinearLayout.LayoutParams(dp(46), dp(46))); gap()
-        rightCol.addView(rbtn(R.drawable.ic_btn_list, "가까운 순 목록") { Sheets.list(this) }, LinearLayout.LayoutParams(dp(46), dp(46)))
+        add(followBtn, "따라가기")
+        add(rbtn(R.drawable.ic_btn_list, "가까운 화장실 목록") { Sheets.list(this) }, "가까운\n화장실")
         root.addView(rightCol, FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply {
             marginEnd = dp(12)
         })
@@ -724,10 +761,11 @@ class MainActivity : AppCompatActivity() {
         }
         val existing = meLabel
         if (existing == null) {
-            meLabel = layer.addLabel(LabelOptions.from("me", LatLng.from(lat, lon)).setStyles(meStyles!![0]))
+            meLabel = layer.addLabel(LabelOptions.from("me", LatLng.from(lat, lon)).setStyles(meStyles!![0]).setRank(10L))
         } else {
             existing.moveTo(LatLng.from(lat, lon))
         }
+        if (routeTarget != null) updateCone()
     }
 
     private val wiggle = object : Runnable {
@@ -844,6 +882,10 @@ class MainActivity : AppCompatActivity() {
         clearRoute()
         routeTarget = Triple(lat, lon, name)
         routeCar = car
+        // 길찾기 동안 나침반으로 부채꼴 방향을 그림
+        sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)?.let {
+            sensorManager.registerListener(compass, it, android.hardware.SensorManager.SENSOR_DELAY_UI)
+        }
         setFollow(false)
         lifecycleScope.launch {
             busy(true)
@@ -879,6 +921,8 @@ class MainActivity : AppCompatActivity() {
 
     fun clearRoute() {
         if (headingOn) setHeading(false)
+        sensorManager.unregisterListener(compass)
+        removeCone()
         routeLine?.let { l -> try { map?.routeLineManager?.layer?.remove(l) } catch (_: Exception) {} }
         routeLine = null
         routeTarget = null
@@ -1140,14 +1184,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         mapView.resume()
-        if (headingOn) sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)?.let {
+        if (routeTarget != null) sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)?.let {
             sensorManager.registerListener(compass, it, android.hardware.SensorManager.SENSOR_DELAY_UI)
         }
     }
 
     override fun onPause() {
         super.onPause()
-        if (headingOn) sensorManager.unregisterListener(compass)
+        if (routeTarget != null) sensorManager.unregisterListener(compass)
         mapView.pause()
     }
 

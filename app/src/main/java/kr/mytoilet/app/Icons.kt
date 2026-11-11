@@ -194,6 +194,25 @@ object Icons {
         return bmp to (tipY / h)
     }
 
+    /** 내가 보는 방향: 가운데에서 위로 퍼지는 파란 부채꼴 + 작은 화살표, angle 도만큼 시계 방향으로 돌림 */
+    fun headingCone(ctx: Context, angle: Float): Bitmap {
+        val d = ctx.resources.displayMetrics.density
+        val size = (150 * d).toInt()
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val cx = size / 2f
+        val r = size / 2f
+        c.rotate(angle, cx, cx)
+        val grad = android.graphics.RadialGradient(cx, cx, r, intArrayOf(0x99378ADD.toInt(), 0x00378ADD), null, android.graphics.Shader.TileMode.CLAMP)
+        c.drawArc(RectF(cx - r, cx - r, cx + r, cx + r), -90f - 28f, 56f, true, Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = grad })
+        // 캐릭터 머리 위 작은 화살표
+        val tip = cx - 34 * d
+        val arrow = Path().apply { moveTo(cx, tip - 9 * d); lineTo(cx + 8 * d, tip + 4 * d); lineTo(cx - 8 * d, tip + 4 * d); close() }
+        c.drawPath(arrow, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+        c.drawPath(arrow, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2 * d; color = C.BLUE_DARK; strokeJoin = Paint.Join.ROUND })
+        return bmp
+    }
+
     /** 숫자 동그라미 (넓게 볼 때 묶음 표시): 종류 색 + 개수, 많을수록 조금 크게 */
     fun countBubble(ctx: Context, color: Int, n: Int): Bitmap {
         val d = ctx.resources.displayMetrics.density
