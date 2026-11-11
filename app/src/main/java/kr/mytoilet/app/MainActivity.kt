@@ -267,6 +267,7 @@ class MainActivity : AppCompatActivity() {
     private val toiletLabels = mutableListOf<Label>()
 
     private var following = false
+    private var followTouches = 0       // 따라가기 중 지도를 민 횟수 (2번이면 꺼짐)
     private var lastProgMove = 0L
     var placing = false
     private var movingTarget: Toilet? = null
@@ -387,7 +388,7 @@ class MainActivity : AppCompatActivity() {
         }
         // 버튼 아래 흰 알약 글자 (무슨 버튼인지 바로 알게)
         fun add(btn: View, label: String) {
-            rightCol.addView(btn, LinearLayout.LayoutParams(dp(46), dp(46)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+            rightCol.addView(btn, LinearLayout.LayoutParams(dp(42), if (btn is LinearLayout) -2 else dp(42)).apply { gravity = Gravity.CENTER_HORIZONTAL })
             rightCol.addView(text(label, 11f, C.BLUE_DARK, 600, Gravity.CENTER).apply {
                 background = round(Color.WHITE, 99f)
                 elevation = dpf(2f)
@@ -395,15 +396,31 @@ class MainActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(3); bottomMargin = dp(7) })
         }
         add(rbtn(R.drawable.ic_btn_search, "위치 검색") { searchPlace() }, "검색")
-        add(rbtn(R.drawable.ic_btn_plus, "확대") { zoom(true) }, "확대")
-        add(rbtn(R.drawable.ic_btn_minus, "축소") { zoom(false) }, "축소")
+        // ＋/－는 한 덩어리 (자리를 덜 차지하게)
+        val zoomPill = vbox(0).apply {
+            background = round(C.BLUE, 21f)
+            elevation = dpf(4f)
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        fun zbtn(icon: Int, desc: String, inOut: Boolean) = ImageView(this).apply {
+            setImageResource(icon); contentDescription = desc; scaleType = ImageView.ScaleType.CENTER
+            setOnClickListener { zoom(inOut) }
+        }
+        zoomPill.addView(zbtn(R.drawable.ic_btn_plus, "확대", true), LinearLayout.LayoutParams(dp(42), dp(40)))
+        zoomPill.addView(View(this).apply { setBackgroundColor(0x88FFFFFF.toInt()) }, LinearLayout.LayoutParams(dp(24), 1))
+        zoomPill.addView(zbtn(R.drawable.ic_btn_minus, "축소", false), LinearLayout.LayoutParams(dp(42), dp(40)))
+        add(zoomPill, "확대·축소")
         add(rbtn(R.drawable.ic_btn_locate, "내 위치") { goToMe() }, "내 위치")
         followBtn = rbtn(R.drawable.ic_btn_follow, "따라가기") { setFollow(!following) }
         add(followBtn, "따라가기")
         add(rbtn(R.drawable.ic_btn_list, "가까운 화장실 목록") { Sheets.list(this) }, "가까운\n화장실")
-        root.addView(rightCol, FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply {
-            marginEnd = dp(12)
-        })
+        // 버튼 줄은 '화장실 추가' 버튼 바로 아래부터 (위쪽과 겹치지 않게)
+        val colLp = FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.TOP).apply { marginEnd = dp(12) }
+        root.addView(rightCol, colLp)
+        topBox.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            val top = v.bottom + dp(10)
+            if (colLp.topMargin != top) { colLp.topMargin = top; rightCol.layoutParams = colLp }
+        }
 
         // 아래쪽
         val bottom = vbox(8).apply { setPadding(dp(12), 0, dp(12), dp(12)) }
@@ -514,10 +531,21 @@ class MainActivity : AppCompatActivity() {
         }
         m.setOnCameraMoveStartListener { _, _ ->
             runOnUiThread {
-                if (following && System.currentTimeMillis() - lastProgMove > 900) setFollow(false)
+                if (following && System.currentTimeMillis() - lastProgMove > 900) {
+                    // 한 번 밀면 그냥 두고(다시 내 위치로), 두 번째에 따라가기 끄기
+                    followTouches++
+                    if (followTouches >= 2) setFollow(false)
+                    else hint.text = "한 번 더 밀면 따라가기가 꺼져요"
+                }
             }
         }
-        m.setOnCameraMoveEndListener { _, _, _ -> runOnUiThread { onCameraEnd() } }
+        m.setOnCameraMoveEndListener { _, _, _ ->
+            runOnUiThread {
+                onCameraEnd()
+                // 따라가기 중 한 번 밀었으면 내 위치로 되돌림
+                if (following && followTouches == 1) myLat?.let { la -> myLon?.let { lo -> move(la, lo) } }
+            }
+        }
         // 위치가 지도보다 먼저 잡혔으면 여기서 내 위치로 이동
         myLat?.let { la -> myLon?.let { lo -> updateMe(); move(la, lo, 16) } }
         tryPendingRoute()
@@ -795,13 +823,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun setFollow(on: Boolean) {
         following = on
+        followTouches = 0
         // 따라가는 중: 진한 남색 + 흰 테두리
         followBtn.background = android.graphics.drawable.GradientDrawable().apply {
             shape = android.graphics.drawable.GradientDrawable.OVAL
             setColor(if (on) C.BLUE_TEXT else C.BLUE)
             if (on) setStroke(dp(3), Color.WHITE)
         }
-        if (on) { goToMe(); hint.text = "내 위치를 따라가는 중 · 지도를 밀면 꺼져요" }
+        if (on) { goToMe(); hint.text = "내 위치를 따라가는 중 · 지도를 두 번 밀면 꺼져요" }
         else if (!placing) hint.text = "두 손가락으로 확대·축소"
     }
 
