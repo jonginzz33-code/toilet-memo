@@ -1011,7 +1011,7 @@ object Sheets {
         })
 
         s.add(a.btn("업데이트 확인 · 지금 v${BuildConfig.VERSION_NAME}") { a.checkUpdate(silent = false) })
-        if (a.isAdmin || (Cloud.loggedIn && !a.realAdmin)) s.add(a.btn("🛠 관리자 페이지") { s.dismiss(); admin(a) })
+        if (a.isAdmin) s.add(a.btn("🛠 관리자 페이지") { s.dismiss(); admin(a) })
         val inq = a.btn("💬 문의하기", C.BLUE_BG, C.BLUE_TEXT) { Login.need(a, "문의하려면") { s.dismiss(); inquiryChat(a, Cloud.uid ?: "", asAdmin = false) } }
         s.add(inq)
         a.lifecycleScope.launch { if (Inquiry.myUnread()) inq.text = "💬 문의하기 · 새 답장 있어요" }
