@@ -88,8 +88,18 @@ object Sheets {
         val (b1, building) = a.field("건물 이름 (필수)", "OO타워", t?.building ?: "")
         val (b2, floor) = a.field("층", "3층", t?.floor ?: "")
         val (b3, place) = a.field("화장실 위치 설명", "엘리베이터 내려서 오른쪽 끝, 남자화장실", t?.place ?: "")
-        val (b4, pw) = a.field("비밀번호 (남자, 남녀 같으면 여기만)", "1234*", t?.pw ?: "")
+        // 비밀번호: [공통 / 남녀 따로]. 공통이면 한 칸, 따로면 남·여 나란히 두 칸
+        val (b4, pw) = a.field("비밀번호 (공통)", "1234*", t?.pw ?: "")
         val (b4w, pw2) = a.field("비밀번호 (여자)", "5678*", t?.pw2 ?: "")
+        var split = !t?.pw2.isNullOrBlank()
+        val pwLabel = b4.getChildAt(0) as TextView
+        val pwRow = a.hbox(8).apply { add(b4, 1f); add(b4w, 1f) }
+        fun paintPw() {
+            pwLabel.text = if (split) "비밀번호 (남자)" else "비밀번호 (공통)"
+            b4w.visibility = if (split) View.VISIBLE else View.GONE
+        }
+        val pwPick = a.segmented(listOf("공통", "남녀 따로"), if (split) 1 else 0) { split = it == 1; paintPw() }
+        paintPw()
         val (b5, memo) = a.field("메모", "휴지 없음, 밤 10시 이후 잠김 등", t?.memo ?: "", multi = true)
         s.add(b1)
         // 새로 추가할 때: 카카오 지도로 그 자리 건물·가게 이름을 찾아 추천 (누르면 건물 이름에 들어감)
@@ -119,7 +129,8 @@ object Sheets {
                 if (building.text.isBlank() && g.names.isNotEmpty()) building.setText(g.names[0])
             }
         }
-        listOf(b2, b3, b4, b4w, b5).forEach { s.add(it) }
+        listOf(b2, b3).forEach { s.add(it) }
+        s.add(pwPick); s.add(pwRow); s.add(b5)
 
         var scope = t?.scope ?: "mine"
         var groupId = t?.groupId ?: ""
@@ -155,7 +166,7 @@ object Sheets {
             item.floor = floor.text.toString().trim()
             item.place = place.text.toString().trim()
             item.pw = pw.text.toString().trim()
-            item.pw2 = pw2.text.toString().trim()
+            item.pw2 = if (split) pw2.text.toString().trim() else ""
             item.memo = memo.text.toString().trim()
             item.scope = scope
             item.groupId = if (scope == "group") groupId else ""
