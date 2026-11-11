@@ -18,12 +18,12 @@ object Sheets {
         else a.chip("나만 보기", C.ORANGE_BG, C.ORANGE_TEXT)
 
     /** 직선거리를 먼저 보여 주고, 걷는 길 거리·시간을 받으면 바꿔 줌 */
-    private fun walkDistInto(a: MainActivity, tv: TextView, lat: Double, lon: Double) {
+    private fun walkDistInto(a: MainActivity, tv: TextView, lat: Double, lon: Double, tail: String = "") {
         val la = a.myLat ?: return
         val lo = a.myLon ?: return
         a.lifecycleScope.launch {
             val r = try { Walk.route(la, lo, lat, lon) } catch (_: Exception) { null } ?: return@launch
-            tv.text = "🚶 ${Geo.fmt(r.meters)} · 약 ${(r.seconds / 60).toInt().coerceAtLeast(1)}분"
+            tv.text = "🚶 ${Geo.fmt(r.meters)} · 약 ${(r.seconds / 60).toInt().coerceAtLeast(1)}분" + tail
         }
     }
 
@@ -778,11 +778,18 @@ object Sheets {
                     (if (a.showPartner) a.partners else emptyList()).map { it as Any to Geo.dist(clat, clon, it.lat, it.lon) }.filter { it.second <= 2000 })
                     .sortedBy { it.second }
             if (items.isEmpty()) box.add(a.text("근처에 화장실이 없어요.\n맨 위 '＋ 화장실 추가'로 저장해 보세요.", 15f, C.TEXT2))
-            for ((x, d) in items.take(80)) {
+            for ((i, pair) in items.take(80).withIndex()) {
+                val (x, d) = pair
                 when (x) {
                     is Toilet -> box.add(row(x.title(), "직선 ${Geo.fmt(d)} · ${Geo.agoShort(x.updated)} · ${x.place.ifBlank { "위치 설명 없음" }}", scopeChip(a, x)) { toiletDetail(a, x) })
                     is Partner -> box.add(row(x.name, "직선 ${Geo.fmt(d)} · ${x.rule.ifBlank { x.addr }}", a.chip("🤝 제휴", C.GREEN_BG, C.GREEN_TEXT)) { partnerDetail(a, x) })
                     is PublicToilet -> box.add(row(x.name, "직선 ${Geo.fmt(d)} · ${x.addr.ifBlank { "공중화장실" }}", a.chip("공중화장실", C.GRAY_BG, C.TEXT2)) { publicDetail(a, x) })
+                }
+                // 내 위치 기준일 때 가까운 3곳만 걷는 길 거리로 (길찾기 서버를 아끼려고)
+                if (useMe && i < 3) {
+                    val sub = ((box.getChildAt(box.childCount - 1) as LinearLayout).getChildAt(0) as LinearLayout).getChildAt(1) as TextView
+                    val (la, lo) = when (x) { is Toilet -> x.lat to x.lon; is Partner -> x.lat to x.lon; is PublicToilet -> x.lat to x.lon; else -> continue }
+                    walkDistInto(a, sub, la, lo, " · " + sub.text.toString().substringAfter(" · "))
                 }
             }
         }
