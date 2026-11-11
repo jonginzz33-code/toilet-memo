@@ -28,6 +28,8 @@ data class Toilet(
     var pw: String = "",          // 화면에서 쓰는 비밀번호(평문). 여자 칸이 따로 있으면 남자 화장실
     var pw2: String = "",         // 여자 화장실 비밀번호 (비어 있으면 pw 하나로 같이 씀)
     var memo: String = "",
+    var paper: String = "",       // 휴지: 있음 / 없음 / "" (모름)
+    var clean: String = "",       // 청결: 깨끗 / 보통 / 별로 / "" (모름)
     var scope: String = "mine",   // mine / group
     var groupId: String = "",
     var groupName: String = "",
@@ -38,7 +40,7 @@ data class Toilet(
 
     fun toMap(): Map<String, Any> = mapOf(
         "id" to id, "lat" to lat, "lon" to lon, "building" to building, "floor" to floor,
-        "place" to place, "pw" to pw, "pw2" to pw2, "memo" to memo, "scope" to scope, "groupId" to groupId,
+        "place" to place, "pw" to pw, "pw2" to pw2, "memo" to memo, "paper" to paper, "clean" to clean, "scope" to scope, "groupId" to groupId,
         "updated" to updated, "by" to by
     )
 
@@ -52,6 +54,8 @@ data class Toilet(
             place = m["place"] as? String ?: "",
             pw = m["pw"] as? String ?: "",
             pw2 = m["pw2"] as? String ?: "",
+            paper = m["paper"] as? String ?: "",
+            clean = m["clean"] as? String ?: "",
             memo = m["memo"] as? String ?: "",
             scope = m["scope"] as? String ?: "mine",
             groupId = m["groupId"] as? String ?: "",
@@ -122,6 +126,7 @@ class LocalStore(ctx: Context) {
                 id = o.optString("id"), lat = o.optDouble("lat"), lon = o.optDouble("lon"),
                 building = o.optString("building"), floor = o.optString("floor"), place = o.optString("place"),
                 pw = Crypto.dec(o.optString("pw")), pw2 = Crypto.dec(o.optString("pw2")), memo = o.optString("memo"),
+                paper = o.optString("paper"), clean = o.optString("clean"),
                 scope = "mine", updated = o.optLong("updated")
             )
         }
@@ -132,7 +137,7 @@ class LocalStore(ctx: Context) {
         list.filter { it.scope == "mine" }.forEach {
             arr.put(JSONObject().put("id", it.id).put("lat", it.lat).put("lon", it.lon)
                 .put("building", it.building).put("floor", it.floor).put("place", it.place)
-                .put("pw", Crypto.enc(it.pw)).put("pw2", Crypto.enc(it.pw2)).put("memo", it.memo).put("updated", it.updated))
+                .put("pw", Crypto.enc(it.pw)).put("pw2", Crypto.enc(it.pw2)).put("memo", it.memo).put("paper", it.paper).put("clean", it.clean).put("updated", it.updated))
         }
         prefs.edit().putString("list", arr.toString()).apply()
     }

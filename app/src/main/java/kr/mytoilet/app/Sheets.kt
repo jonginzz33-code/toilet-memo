@@ -65,6 +65,16 @@ object Sheets {
             s.add(r)
         }
         if (t.pw2.isBlank()) pwRow("🔑", t.pw) else { pwRow("🚹 남", t.pw); pwRow("🚺 여", t.pw2) }
+        if (t.paper.isNotBlank() || t.clean.isNotBlank()) {
+            val cr = a.hbox(6)
+            if (t.paper.isNotBlank()) cr.add(if (t.paper == "없음") a.chip("🧻 휴지 없음", C.RED_BG, C.RED_TEXT) else a.chip("🧻 휴지 있음", C.GREEN_BG, C.GREEN_TEXT))
+            when (t.clean) {
+                "깨끗" -> cr.add(a.chip("✨ 깨끗해요", C.GREEN_BG, C.GREEN_TEXT))
+                "보통" -> cr.add(a.chip("✨ 보통", C.AMBER_BG, C.AMBER_TEXT))
+                "별로" -> cr.add(a.chip("✨ 별로예요", C.RED_BG, C.RED_TEXT))
+            }
+            s.add(cr)
+        }
         if (t.memo.isNotBlank()) s.add(a.text("📝 ${t.memo}", 14f, C.TEXT2))
 
         s.add(routeButtons(a, s, t.lat, t.lon, t.title()))
@@ -130,7 +140,17 @@ object Sheets {
             }
         }
         listOf(b2, b3).forEach { s.add(it) }
-        s.add(pwPick); s.add(pwRow); s.add(b5)
+        s.add(pwPick); s.add(pwRow)
+        // 휴지·청결은 터치 한 번으로
+        val papers = listOf("있음", "없음", "")
+        var paper = t?.paper ?: ""
+        s.add(a.text("🧻 휴지", 12f, C.TEXT2, 600))
+        s.add(a.segmented(listOf("있어요", "없어요", "몰라요"), papers.indexOf(paper).coerceAtLeast(2)) { paper = papers[it] })
+        val cleans = listOf("깨끗", "보통", "별로")
+        var clean = t?.clean ?: ""
+        s.add(a.text("✨ 청결", 12f, C.TEXT2, 600))
+        s.add(a.segmented(listOf("깨끗해요", "보통", "별로예요"), cleans.indexOf(clean)) { clean = cleans[it] })
+        s.add(b5)
 
         var scope = t?.scope ?: "mine"
         var groupId = t?.groupId ?: ""
@@ -167,6 +187,8 @@ object Sheets {
             item.place = place.text.toString().trim()
             item.pw = pw.text.toString().trim()
             item.pw2 = if (split) pw2.text.toString().trim() else ""
+            item.paper = paper
+            item.clean = clean
             item.memo = memo.text.toString().trim()
             item.scope = scope
             item.groupId = if (scope == "group") groupId else ""
