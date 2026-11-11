@@ -504,7 +504,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
         m.setOnCameraMoveEndListener { _, _, _ -> runOnUiThread { onCameraEnd() } }
-        myLat?.let { updateMe() }
+        // 위치가 지도보다 먼저 잡혔으면 여기서 내 위치로 이동
+        myLat?.let { la -> myLon?.let { lo -> updateMe(); move(la, lo, 16) } }
         tryPendingRoute()
         handler.postDelayed({ onCameraEnd() }, 400)
     }
@@ -720,6 +721,8 @@ class MainActivity : AppCompatActivity() {
         if (!hasLoc()) return
         val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000).setMinUpdateDistanceMeters(3f).build()
         fused.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
+        // 마지막으로 알던 위치로 바로 시작 (새 위치를 기다리지 않게)
+        fused.lastLocation.addOnSuccessListener { l -> if (l != null && myLat == null) locCallback.onLocationResult(LocationResult.create(listOf(l))) }
     }
 
     fun refreshCharacter() {
