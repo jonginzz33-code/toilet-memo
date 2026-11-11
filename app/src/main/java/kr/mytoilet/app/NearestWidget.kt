@@ -45,7 +45,8 @@ class NearestWidget : AppWidgetProvider() {
         fun saveList(ctx: Context, list: List<Toilet>, partners: List<Partner> = emptyList()) {
             val arr = JSONArray()
             list.forEach {
-                arr.put(JSONObject().put("n", it.title()).put("y", it.lat).put("x", it.lon).put("p", it.place).put("w", it.pw))
+                arr.put(JSONObject().put("n", it.title()).put("y", it.lat).put("x", it.lon).put("p", it.place)
+                    .put("w", if (it.pw2.isBlank()) it.pw else "🚹${it.pw.ifBlank { "-" }} 🚺${it.pw2}"))
             }
             val parr = JSONArray()
             partners.forEach {
@@ -118,7 +119,7 @@ class NearestWidget : AppWidgetProvider() {
             val mName = p.getString("m_name", null)
             v.setTextViewText(R.id.w_m_name, mName ?: if (at == 0L) "⟳ 새로고침" else "저장한 화장실 없음")
             v.setTextViewText(R.id.w_m_sub, if (mName != null) p.getString("m_sub", "") else "")
-            v.setTextViewText(R.id.w_m_pw, if (mName != null) "🔑 " + p.getString("m_pw", "").orEmpty().ifBlank { "없음" } else "")
+            v.setTextViewText(R.id.w_m_pw, if (mName != null) p.getString("m_pw", "").orEmpty().let { if (it.startsWith("🚹")) it else "🔑 " + it.ifBlank { "없음" } } else "")
             v.setViewVisibility(R.id.w_m_go, if (mName != null) View.VISIBLE else View.GONE)
             if (mName != null) v.setOnClickPendingIntent(R.id.w_m_go, routeIntent(ctx, 1, p.getFloat("m_y", 0f), p.getFloat("m_x", 0f), mName))
 

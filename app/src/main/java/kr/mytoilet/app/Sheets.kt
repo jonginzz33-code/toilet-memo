@@ -50,17 +50,21 @@ object Sheets {
         s.add(dateRow)
         s.add(a.text(if (t.place.isBlank()) "위치 설명 없음" else t.place, 15f, C.TEXT2))
 
-        val pwRow = a.hbox(10).apply {
-            background = a.round(C.GRAY_BG, 14f)
-            setPadding(a.dp(14), a.dp(10), a.dp(8), a.dp(10))
+        // 여자 칸이 있으면 남·여 두 줄, 없으면 예전처럼 한 줄
+        fun pwRow(icon: String, value: String) {
+            val r = a.hbox(10).apply {
+                background = a.round(C.GRAY_BG, 14f)
+                setPadding(a.dp(14), a.dp(10), a.dp(8), a.dp(10))
+            }
+            r.add(a.text(icon, 18f))
+            r.add(a.text(value.ifBlank { "(비밀번호 없음)" }, 22f, C.TEXT, 700).apply {
+                letterSpacing = 0.08f
+                setTextIsSelectable(true)
+            }, 1f)
+            if (value.isNotBlank()) r.add(a.btn("복사", 0xFFFFFFFF.toInt()) { a.copy(value) })
+            s.add(r)
         }
-        pwRow.add(a.text("🔑", 18f))
-        pwRow.add(a.text(t.pw.ifBlank { "(비밀번호 없음)" }, 22f, C.TEXT, 700).apply {
-            letterSpacing = 0.08f
-            setTextIsSelectable(true)
-        }, 1f)
-        if (t.pw.isNotBlank()) pwRow.add(a.btn("복사", 0xFFFFFFFF.toInt()) { a.copy(t.pw) })
-        s.add(pwRow)
+        if (t.pw2.isBlank()) pwRow("🔑", t.pw) else { pwRow("🚹 남", t.pw); pwRow("🚺 여", t.pw2) }
         if (t.memo.isNotBlank()) s.add(a.text("📝 ${t.memo}", 14f, C.TEXT2))
 
         s.add(routeButtons(a, s, t.lat, t.lon, t.title()))
@@ -84,7 +88,8 @@ object Sheets {
         val (b1, building) = a.field("건물 이름 (필수)", "OO타워", t?.building ?: "")
         val (b2, floor) = a.field("층", "3층", t?.floor ?: "")
         val (b3, place) = a.field("화장실 위치 설명", "엘리베이터 내려서 오른쪽 끝, 남자화장실", t?.place ?: "")
-        val (b4, pw) = a.field("비밀번호", "1234*", t?.pw ?: "")
+        val (b4, pw) = a.field("비밀번호 (남자, 남녀 같으면 여기만)", "1234*", t?.pw ?: "")
+        val (b4w, pw2) = a.field("비밀번호 (여자)", "5678*", t?.pw2 ?: "")
         val (b5, memo) = a.field("메모", "휴지 없음, 밤 10시 이후 잠김 등", t?.memo ?: "", multi = true)
         s.add(b1)
         // 새로 추가할 때: 카카오 지도로 그 자리 건물·가게 이름을 찾아 추천 (누르면 건물 이름에 들어감)
@@ -114,7 +119,7 @@ object Sheets {
                 if (building.text.isBlank() && g.names.isNotEmpty()) building.setText(g.names[0])
             }
         }
-        listOf(b2, b3, b4, b5).forEach { s.add(it) }
+        listOf(b2, b3, b4, b4w, b5).forEach { s.add(it) }
 
         var scope = t?.scope ?: "mine"
         var groupId = t?.groupId ?: ""
@@ -150,6 +155,7 @@ object Sheets {
             item.floor = floor.text.toString().trim()
             item.place = place.text.toString().trim()
             item.pw = pw.text.toString().trim()
+            item.pw2 = pw2.text.toString().trim()
             item.memo = memo.text.toString().trim()
             item.scope = scope
             item.groupId = if (scope == "group") groupId else ""
