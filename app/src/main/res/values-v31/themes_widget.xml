@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 위젯 새로고침용 보이지 않는 창: 안드로이드 12+ 시작 화면(아이콘)이 비치지 않게 -->
+    <style name="WidgetRefreshTheme" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

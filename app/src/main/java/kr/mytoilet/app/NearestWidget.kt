@@ -159,21 +159,23 @@ class WidgetRefreshActivity : Activity() {
             Toast.makeText(this, "앱을 열어 위치 권한을 허용해 주세요", Toast.LENGTH_SHORT).show()
             finish(); return
         }
-        LocationServices.getFusedLocationProviderClient(this)
+        // 위치는 앱 쪽에서 받고, 이 창은 바로 닫음 (시작 화면이 비치지 않게)
+        val app = applicationContext
+        LocationServices.getFusedLocationProviderClient(app)
             .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { l ->
                 if (l == null) {
-                    Toast.makeText(this, "위치를 못 찾았어요. GPS를 켜 주세요", Toast.LENGTH_SHORT).show()
-                    NearestWidget.redraw(applicationContext)
-                    finish(); return@addOnSuccessListener
+                    Toast.makeText(app, "위치를 못 찾았어요. GPS를 켜 주세요", Toast.LENGTH_SHORT).show()
+                    NearestWidget.redraw(app)
+                    return@addOnSuccessListener
                 }
-                val app = applicationContext
                 kotlinx.coroutines.MainScope().launch {
                     NearestWidget.refresh(app, l.latitude, l.longitude)
                     Toast.makeText(app, "새로고침했어요", Toast.LENGTH_SHORT).show()
                 }
-                finish()
             }
-            .addOnFailureListener { NearestWidget.redraw(applicationContext); finish() }
+            .addOnFailureListener { NearestWidget.redraw(app) }
+        finish()
+        @Suppress("DEPRECATION") overridePendingTransition(0, 0)
     }
 }

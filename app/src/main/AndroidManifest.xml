@@ -32,7 +32,7 @@
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/WidgetRefreshTheme" />
 
         <!-- 홈 화면 위젯: 가장 가까운 화장실 -->
         <receiver
