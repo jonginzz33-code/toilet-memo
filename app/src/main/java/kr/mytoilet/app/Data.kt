@@ -264,9 +264,15 @@ object Geo {
 
     /** 지도·상세용 짧은 날짜: 오늘, 3일 전, 1주 전, 2달 전, 1년 전 */
     fun agoShort(ms: Long): String {
-        val days = (System.currentTimeMillis() - ms) / 86_400_000L
+        // 24시간이 아니라 달력 날짜로 셈 (어제 밤에 저장한 건 '어제')
+        fun dayStart(t: Long) = java.util.Calendar.getInstance().apply {
+            timeInMillis = t; set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val days = Math.round((dayStart(System.currentTimeMillis()) - dayStart(ms)) / 86_400_000.0)
         return when {
             days < 1 -> "오늘"
+            days == 1L -> "어제"
             days < 7 -> "${days}일 전"
             days < 30 -> "${days / 7}주 전"
             days < 365 -> "${days / 30}달 전"
