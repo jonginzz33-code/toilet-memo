@@ -764,7 +764,11 @@ class MainActivity : AppCompatActivity() {
         val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000).setMinUpdateDistanceMeters(3f).build()
         fused.requestLocationUpdates(req, locCallback, Looper.getMainLooper())
         // 마지막으로 알던 위치로 바로 시작 (새 위치를 기다리지 않게)
-        fused.lastLocation.addOnSuccessListener { l -> if (l != null && myLat == null) locCallback.onLocationResult(LocationResult.create(listOf(l))) }
+        // 단, 2분 안의 위치만 (오래된 위치면 엉뚱한 곳으로 가니 새 위치를 기다림)
+        fused.lastLocation.addOnSuccessListener { l ->
+            if (l != null && myLat == null && System.currentTimeMillis() - l.time < 120_000)
+                locCallback.onLocationResult(LocationResult.create(listOf(l)))
+        }
     }
 
     fun refreshCharacter() {
