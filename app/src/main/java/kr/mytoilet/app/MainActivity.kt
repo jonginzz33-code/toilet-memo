@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -125,7 +126,7 @@ class MainActivity : AppCompatActivity() {
         val lon = myLon ?: return
         val layer = m.labelManager?.layer ?: return
         if (!coneWanted) { removeCone(); return }
-        val step = ((((heading - mapRotation) % 360 + 360) % 360) / 10).toInt() % 36
+        val step = Math.round((((heading - mapRotation) % 360 + 360) % 360) / 10f) % 36
         val st = coneStyles.getOrPut(step) {
             LabelStyles.from(LabelStyle.from(Icons.headingCone(this, step * 10f)).setAnchorPoint(0.5f, 0.5f))
         }
@@ -152,12 +153,20 @@ class MainActivity : AppCompatActivity() {
     private val sensorManager by lazy { getSystemService(Context.SENSOR_SERVICE) as android.hardware.SensorManager }
     private val rotMatrix = FloatArray(9)
     private val orient = FloatArray(3)
+    private val remapped = FloatArray(9)
+    private var declination = 0f           // 자석 북쪽 ↔ 진짜 북쪽 차이 (한국은 약 -8~-9도)
     private val compass = object : android.hardware.SensorEventListener {
         override fun onSensorChanged(e: android.hardware.SensorEvent) {
             if (System.currentTimeMillis() - gpsBearingAt < 3000) return
             android.hardware.SensorManager.getRotationMatrixFromVector(rotMatrix, e.values)
             android.hardware.SensorManager.getOrientation(rotMatrix, orient)
-            var deg = Math.toDegrees(orient[0].toDouble()).toFloat()
+            // 폰을 세워 들면(45도 넘게) 방향 값이 흔들리니, 화면 뒤쪽이 향한 방향으로 계산
+            if (Math.abs(orient[1]) > Math.PI / 4) {
+                android.hardware.SensorManager.remapCoordinateSystem(rotMatrix,
+                    android.hardware.SensorManager.AXIS_X, android.hardware.SensorManager.AXIS_Z, remapped)
+                android.hardware.SensorManager.getOrientation(remapped, orient)
+            }
+            var deg = declination + Math.toDegrees(orient[0].toDouble()).toFloat()
             // 화면이 가로면 보정
             deg += when (windowManager.defaultDisplay.rotation) { android.view.Surface.ROTATION_90 -> 90f; android.view.Surface.ROTATION_270 -> -90f; else -> 0f }
             applyHeading(deg)
@@ -754,7 +763,10 @@ class MainActivity : AppCompatActivity() {
             val first = myLat == null
             myLat = l.latitude; myLon = l.longitude
             if (first) tryPendingRoute()
-            if (coneWanted && l.hasBearing() && l.hasSpeed() && l.speed > 1.5f) {
+            declination = android.hardware.GeomagneticField(l.latitude.toFloat(), l.longitude.toFloat(), l.altitude.toFloat(), l.time).declination
+            // 걷는 속도(약 1m/s)부터 GPS 진행 방향을 씀. 방향 오차가 크면(30도+) 나침반 유지
+            if (coneWanted && l.hasBearing() && l.hasSpeed() && l.speed > 0.8f &&
+                (Build.VERSION.SDK_INT < 26 || !l.hasBearingAccuracy() || l.bearingAccuracyDegrees < 30f)) {
                 gpsBearingAt = System.currentTimeMillis()
                 applyHeading(l.bearing)
             }
