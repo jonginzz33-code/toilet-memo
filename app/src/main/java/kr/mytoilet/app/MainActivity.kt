@@ -118,13 +118,13 @@ class MainActivity : AppCompatActivity() {
     private var coneLabel: Label? = null
     private val coneStyles = HashMap<Int, LabelStyles>()   // 10도 단위로 그려 둔 부채꼴
 
-    /** 내 위치에 '보는 방향' 파란 부채꼴 (길찾기 중에만). 화면 기준 각도 = 방향 - 지도 회전 */
+    /** 내 위치에 '보는 방향' 파란 부채꼴 (길찾기·따라가기 중). 화면 기준 각도 = 방향 - 지도 회전 */
     private fun updateCone() {
         val m = map ?: return
         val lat = myLat ?: return
         val lon = myLon ?: return
         val layer = m.labelManager?.layer ?: return
-        if (routeTarget == null) { removeCone(); return }
+        if (!coneWanted) { removeCone(); return }
         val step = ((((heading - mapRotation) % 360 + 360) % 360) / 10).toInt() % 36
         val st = coneStyles.getOrPut(step) {
             LabelStyles.from(LabelStyle.from(Icons.headingCone(this, step * 10f)).setAnchorPoint(0.5f, 0.5f))
@@ -132,6 +132,17 @@ class MainActivity : AppCompatActivity() {
         val c = coneLabel
         if (c == null) coneLabel = layer.addLabel(LabelOptions.from("cone", LatLng.from(lat, lon)).setStyles(st).setRank(0L))
         else { c.moveTo(LatLng.from(lat, lon)); c.changeStyles(st) }
+    }
+
+    private val coneWanted get() = routeTarget != null || following
+
+    /** 부채꼴이 필요할 때만 나침반을 켬 (배터리) */
+    private fun syncCompass() {
+        sensorManager.unregisterListener(compass)
+        if (coneWanted) sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)?.let {
+            sensorManager.registerListener(compass, it, android.hardware.SensorManager.SENSOR_DELAY_UI)
+        }
+        updateCone()
     }
 
     private fun removeCone() {
@@ -184,14 +195,11 @@ class MainActivity : AppCompatActivity() {
         }
         val m = map
         if (on) {
-            val s = sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)
-            if (s != null) sensorManager.registerListener(compass, s, android.hardware.SensorManager.SENSOR_DELAY_UI)
             setFollow(true)
             lastProgMove = System.currentTimeMillis()
             try { m?.moveCamera(CameraUpdateFactory.tiltTo(Math.toRadians(40.0))) } catch (_: Exception) {}
             myLat?.let { la -> myLon?.let { lo -> move(la, lo, 17) } }
         } else {
-            if (routeTarget == null) sensorManager.unregisterListener(compass)
             lastProgMove = System.currentTimeMillis()
             lastRotated = 999f
             mapRotation = 0f
@@ -746,7 +754,7 @@ class MainActivity : AppCompatActivity() {
             val first = myLat == null
             myLat = l.latitude; myLon = l.longitude
             if (first) tryPendingRoute()
-            if (headingOn && l.hasBearing() && l.hasSpeed() && l.speed > 1.5f) {
+            if (coneWanted && l.hasBearing() && l.hasSpeed() && l.speed > 1.5f) {
                 gpsBearingAt = System.currentTimeMillis()
                 applyHeading(l.bearing)
             }
@@ -797,7 +805,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             existing.moveTo(LatLng.from(lat, lon))
         }
-        if (routeTarget != null) updateCone()
+        if (coneWanted) updateCone()
     }
 
     private val wiggle = object : Runnable {
@@ -834,6 +842,7 @@ class MainActivity : AppCompatActivity() {
             setColor(if (on) C.BLUE_TEXT else C.BLUE)
             if (on) setStroke(dp(3), Color.WHITE)
         }
+        syncCompass()
         if (on) { goToMe(); hint.text = "내 위치를 따라가는 중 · 지도를 두 번 밀면 꺼져요" }
         else if (!placing) hint.text = "두 손가락으로 확대·축소"
     }
@@ -915,11 +924,7 @@ class MainActivity : AppCompatActivity() {
         clearRoute()
         routeTarget = Triple(lat, lon, name)
         routeCar = car
-        // 길찾기 동안 나침반으로 부채꼴 방향을 그림
-        sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)?.let {
-            sensorManager.registerListener(compass, it, android.hardware.SensorManager.SENSOR_DELAY_UI)
-        }
-        setFollow(false)
+        setFollow(false)   // 길찾기 동안 나침반으로 부채꼴 방향을 그림 (syncCompass)
         lifecycleScope.launch {
             busy(true)
             val r = try { Walk.route(sLat, sLon, lat, lon, car) } catch (_: Exception) { null } finally { busy(false) }
@@ -954,11 +959,10 @@ class MainActivity : AppCompatActivity() {
 
     fun clearRoute() {
         if (headingOn) setHeading(false)
-        sensorManager.unregisterListener(compass)
-        removeCone()
         routeLine?.let { l -> try { map?.routeLineManager?.layer?.remove(l) } catch (_: Exception) {} }
         routeLine = null
         routeTarget = null
+        syncCompass()
         if (::routeBar.isInitialized) routeBar.visibility = View.GONE
         if (!placing) { addBtn.visibility = View.VISIBLE; urgentBtn.visibility = View.VISIBLE }
     }
@@ -1217,14 +1221,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         mapView.resume()
-        if (routeTarget != null) sensorManager.getDefaultSensor(android.hardware.Sensor.TYPE_ROTATION_VECTOR)?.let {
-            sensorManager.registerListener(compass, it, android.hardware.SensorManager.SENSOR_DELAY_UI)
-        }
+        syncCompass()
     }
 
     override fun onPause() {
         super.onPause()
-        if (routeTarget != null) sensorManager.unregisterListener(compass)
+        sensorManager.unregisterListener(compass)
         mapView.pause()
     }
 
