@@ -1,0 +1,35 @@
+name: Play internal upload
+
+# 빌드가 끝나면 최신 .aab 를 Play 내부 테스트에 자동으로 올림
+# (비밀값 FIREBASE_SA 의 서비스 계정이 Play Console '사용자 및 권한'에 초대돼 있어야 함)
+on:
+  workflow_run:
+    workflows: [ "Build APK" ]
+    types: [ completed ]
+  workflow_dispatch:
+
+jobs:
+  upload:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get latest .aab
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern 'toilet-memo-play.aab' --dir out
+          echo "VN=$(gh release view --repo "$GITHUB_REPOSITORY" --json name -q .name)" >> $GITHUB_ENV
+
+      - name: Service account email (Play Console 에 초대할 주소)
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: printf '%s' "$FIREBASE_SA" | jq -r .client_email
+
+      - uses: r0adkll/upload-google-play@v1.1.3
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.FIREBASE_SA }}
+          packageName: kr.mytoilet.app
+          releaseFiles: out/toilet-memo-play.aab
+          releaseName: ${{ env.VN }}
+          track: internal
+          status: completed
