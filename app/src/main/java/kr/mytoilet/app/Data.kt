@@ -165,6 +165,10 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("showPublic", true)
         set(v) = p.edit().putBoolean("showPublic", v).apply()
     /** 총관리자가 관리자 화면으로 볼지 (끄면 일반 사용자 화면) */
+    /** 마지막으로 본 공지 번호 (같은 공지는 한 번만) */
+    var noticeSeen: Long
+        get() = p.getLong("noticeSeen", 0L)
+        set(v) = p.edit().putLong("noticeSeen", v).apply()
     var adminView: Boolean
         get() = p.getBoolean("adminView", true)
         set(v) = p.edit().putBoolean("adminView", v).apply()

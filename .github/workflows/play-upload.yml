@@ -25,6 +25,16 @@ jobs:
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
         run: printf '%s' "$FIREBASE_SA" | jq -r .client_email
 
+      - name: Turn on Play API (처음 한 번만 필요)
+        continue-on-error: true
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" -q
+          gcloud services enable androidpublisher.googleapis.com --project my-toilet-ce481
+          rm -f "$RUNNER_TEMP/sa.json"
+
       - uses: r0adkll/upload-google-play@v1.1.3
         with:
           serviceAccountJsonPlainText: ${{ secrets.FIREBASE_SA }}

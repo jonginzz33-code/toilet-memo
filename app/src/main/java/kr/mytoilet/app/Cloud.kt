@@ -85,6 +85,20 @@ object Cloud {
         db.collection("config").document("groups").set(mapOf("defaultMax" to c.defaultMax, "maxGroups" to c.maxGroups)).await()
     }
 
+    /** 앱 켤 때 띄우는 공지 팝업 (config/notice). 내용이 비면 안 띄움 */
+    data class Notice(val id: Long, val title: String, val body: String)
+
+    suspend fun notice(): Notice? = try {
+        val d = db.collection("config").document("notice").get().await()
+        val body = d.getString("body").orEmpty()
+        if (body.isBlank()) null else Notice(d.getLong("id") ?: 0L, d.getString("title").orEmpty(), body)
+    } catch (_: Exception) { null }
+
+    suspend fun setNotice(title: String, body: String) {
+        db.collection("config").document("notice")
+            .set(mapOf("id" to System.currentTimeMillis(), "title" to title, "body" to body)).await()
+    }
+
     suspend fun setGroupMax(id: String, max: Int) {
         db.collection("groups").document(id).update("maxMembers", max).await()
     }

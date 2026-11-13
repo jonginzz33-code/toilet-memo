@@ -1249,6 +1249,25 @@ object Sheets {
         val newInq = try { Inquiry.threads().count { it.unreadAdmin } } catch (_: Exception) { 0 }
         box.add(a.btn("💬 문의함" + if (newInq > 0) " · 새 문의 $newInq" else "", if (newInq > 0) C.RED else C.BLUE, Color.WHITE) { inquiryList(a) })
 
+        // 공지 팝업 (총관리자): 올리면 모든 사용자가 앱을 켤 때 한 번 봄
+        box.add(a.text("📢 공지 팝업", 16f, C.TEXT, 800))
+        val cur = Cloud.notice()
+        val (nb1, nTitle) = a.field("제목", "예: 정식 출시했어요!", cur?.title.orEmpty())
+        val (nb2, nBody) = a.field("내용", "앱을 켤 때 한 번 보여요", cur?.body.orEmpty(), multi = true)
+        box.add(nb1); box.add(nb2)
+        val nRow = a.hbox(8)
+        nRow.add(a.btn("공지 내리기") {
+            a.lifecycleScope.launch { try { Cloud.setNotice("", ""); nTitle.setText(""); nBody.setText(""); a.toast("공지를 내렸어요") } catch (e: Exception) { a.toast("실패: ${e.message}") } }
+        }, 1f)
+        nRow.add(a.btn("공지 올리기", C.GREEN, Color.WHITE) {
+            val body = nBody.text.toString().trim()
+            if (body.isEmpty()) { a.toast("내용을 적어 주세요"); return@btn }
+            a.confirm("공지 올리기", "모든 사용자가 앱을 켤 때 이 공지를 한 번 봐요.", "올리기") {
+                a.lifecycleScope.launch { try { Cloud.setNotice(nTitle.text.toString().trim(), body); a.toast("공지를 올렸어요") } catch (e: Exception) { a.toast("실패: ${e.message}") } }
+            }
+        }, 1f)
+        box.add(nRow)
+
         // 그룹 설정 (총관리자)
         box.add(a.text("👥 그룹 설정", 16f, C.TEXT, 800))
         val gcfg = Cloud.groupConfig()

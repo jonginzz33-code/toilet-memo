@@ -323,6 +323,7 @@ class MainActivity : AppCompatActivity() {
             refreshUnavailable()
             reloadPartners()
             checkUpdate(silent = true)
+            showNotice()
         }
         handler.postDelayed(wiggle, 500)
         takeRouteIntent(intent)
@@ -1218,6 +1219,17 @@ class MainActivity : AppCompatActivity() {
 
     fun open(url: String) {
         try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) {}
+    }
+
+    /** 관리자가 올린 공지를 한 번만 팝업으로 */
+    private suspend fun showNotice() {
+        val n = Cloud.notice() ?: return
+        if (n.id == prefs.noticeSeen) return
+        prefs.noticeSeen = n.id
+        val s = Sheet(this, n.title.ifBlank { "알려 드려요" })
+        s.add(text(n.body, 15f, C.TEXT2))
+        s.add(primaryBtn("확인") { s.dismiss() })
+        s.show()
     }
 
     fun checkUpdate(silent: Boolean) {
