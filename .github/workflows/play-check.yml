@@ -1,0 +1,31 @@
+name: Play status check
+
+# Play 트랙 상태만 읽어 봄 (아무것도 바꾸지 않음: edit 을 만들고 커밋 없이 지움)
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read tracks
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          pip install -q google-auth requests
+          python3 - <<'EOF'
+          import json, os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          cred = service_account.Credentials.from_service_account_info(
+              json.loads(os.environ["FIREBASE_SA"]), scopes=["https://www.googleapis.com/auth/androidpublisher"])
+          s = AuthorizedSession(cred)
+          base = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/kr.mytoilet.app/edits"
+          edit = s.post(base).json()["id"]
+          for t in s.get(f"{base}/{edit}/tracks").json().get("tracks", []):
+              print("TRACK", t["track"], json.dumps([{k: r.get(k) for k in ("name", "status", "versionCodes")} for r in t.get("releases", [])], ensure_ascii=False))
+          for tr in ("internal", "alpha"):
+              r = s.get(f"{base}/{edit}/testers/{tr}")
+              print("TESTERS", tr, r.status_code, r.text.replace("\n", " ")[:300])
+          s.delete(f"{base}/{edit}")
+          EOF
