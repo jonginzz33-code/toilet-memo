@@ -131,7 +131,7 @@ class MainActivity : AppCompatActivity() {
             LabelStyles.from(LabelStyle.from(Icons.headingCone(this, step * 10f)).setAnchorPoint(0.5f, 0.5f))
         }
         val c = coneLabel
-        if (c == null) coneLabel = layer.addLabel(LabelOptions.from("cone", LatLng.from(lat, lon)).setStyles(st).setRank(0L))
+        if (c == null) coneLabel = layer.addLabel(LabelOptions.from("cone", LatLng.from(lat, lon)).setStyles(st).setRank(999L))
         else { c.moveTo(LatLng.from(lat, lon)); c.changeStyles(st) }
     }
 
@@ -814,7 +814,7 @@ class MainActivity : AppCompatActivity() {
         }
         val existing = meLabel
         if (existing == null) {
-            meLabel = layer.addLabel(LabelOptions.from("me", LatLng.from(lat, lon)).setStyles(meStyles!![0]).setRank(10L))
+            meLabel = layer.addLabel(LabelOptions.from("me", LatLng.from(lat, lon)).setStyles(meStyles!![0]).setRank(1000L))   // 내 캐릭터는 늘 맨 위
         } else {
             existing.moveTo(LatLng.from(lat, lon))
         }
