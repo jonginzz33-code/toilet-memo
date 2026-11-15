@@ -20,22 +20,23 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, urllib.request, urllib.parse
-          names = dict(K1="TMAP_KEY", K2="TMAP_APP_KEY", K3="TMAP_APPKEY", K4="TMAP_API_KEY", K5="TMAP", K6="SK_KEY", K7="SKT_KEY", K8="TMAPKEY")
-          for env, name in names.items():
-              k = os.environ.get(env, "").strip()
-              print(name, "set" if k else "-")
-              if not k: continue
-              for path, q in (("/tmap/pois", dict(version=1, searchKeyword="화장실", centerLat=37.318, centerLon=126.845, radius=2, count=200, page=1)),
-                              ("/tmap/pois/search/around", dict(version=1, categories="화장실", centerLat=37.318, centerLon=126.845, radius=2, count=200, page=1))):
-                  u = "https://apis.openapi.sk.com" + path + "?" + urllib.parse.urlencode(q)
-                  try:
-                      with urllib.request.urlopen(urllib.request.Request(u, headers={"appKey": k, "Accept": "application/json"}), timeout=30) as r:
-                          d = json.loads(r.read() or b"{}")
-                      sp = d.get("searchPoiInfo", {})
-                      pois = sp.get("pois", {}).get("poi", [])
-                      print(" ", path, "total", sp.get("totalCount"), "got", len(pois))
-                      for p in pois[:15]:
-                          print("   ", p.get("name"), "|", p.get("upperBizName"), ">", p.get("middleBizName"), ">", p.get("lowerBizName"), ">", p.get("detailBizName"), "|", p.get("noorLat"), p.get("noorLon"))
-                  except urllib.error.HTTPError as e:
-                      print(" ", path, "HTTP", e.code, e.read()[:200].decode("utf-8", "replace").replace("{", "(").replace("}", ")"))
+          k = os.environ["K1"].strip()
+          def get(path, **q):
+              u = "https://apis.openapi.sk.com" + path + "?" + urllib.parse.urlencode(dict(version=1, **q))
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(u, headers={"appKey": k, "Accept": "application/json"}), timeout=30) as r:
+                      return json.loads(r.read() or b"{}")
+              except urllib.error.HTTPError as e:
+                  return {"err": e.code, "body": e.read()[:150].decode("utf-8", "replace").replace("{", "(").replace("}", ")")}
+          def show(tag, d, n=12):
+              if "err" in d: print(tag, "HTTP", d["err"], d["body"]); return
+              sp = d.get("searchPoiInfo", {}); pois = sp.get("pois", {}).get("poi", []) if sp else []
+              print(tag, "total", sp.get("totalCount") if sp else None, "got", len(pois))
+              for p in pois[:n]:
+                  print("   ", p.get("name"), "|", p.get("middleBizName"), ">", p.get("lowerBizName"), ">", p.get("detailBizName"))
+          for kw in ("공중화장실", "개방화장실", "화장실"):
+              show("전국 " + kw, get("/tmap/pois", searchKeyword=kw, count=200, page=1), 5)
+              show("안산 " + kw, get("/tmap/pois", searchKeyword=kw, centerLat=37.318, centerLon=126.845, radius=3, searchtypCd="R", count=50, page=1))
+          for cat in ("공중화장실", "화장실", "개방화장실"):
+              show("주변카테고리 " + cat, get("/tmap/pois/search/around", categories=cat, centerLat=37.318, centerLon=126.845, radius=3, count=50, page=1))
           PY
