@@ -12,12 +12,13 @@ import java.util.zip.GZIPInputStream
 
 /**
  * 공중화장실 데이터: GitHub가 매달 공공 API에서 받아 둔 파일을 내려받아 폰에 저장해 씀.
- * 로그인·관리자 작업 없이 누구나 볼 수 있음. 앱을 켤 때마다 새 파일이 올라왔는지(크기가 다른지) 확인.
+ * 로그인·관리자 작업 없이 누구나 볼 수 있음. 하루 한 번 새 파일이 올라왔는지(크기가 다른지) 확인.
  */
 object PublicData {
     private const val URL_FILE =
         "https://github.com/${BuildConfig.GITHUB_REPO}/releases/download/public-data/public-toilets.json.gz"
     private const val REFRESH_MS = 7L * 24 * 60 * 60 * 1000
+    private const val CHECK_MS = 24L * 60 * 60 * 1000
 
     lateinit var dir: File
     private val lock = Mutex()
@@ -41,8 +42,12 @@ object PublicData {
         if (System.currentTimeMillis() - failedAt < 10 * 60 * 1000) throw IllegalStateException("잠시 후 다시")
         try { withContext(Dispatchers.IO) {
             val f = file
+            // 새 파일 확인은 하루 한 번만 (1바이트만 받아 크기 비교, 바뀌었을 때만 전체 받기)
+            val mark = File(dir, "public-checked")
+            val checkNow = System.currentTimeMillis() - mark.lastModified() > CHECK_MS
+            if (checkNow) mark.writeText("")
             val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > REFRESH_MS ||
-                remoteSize().let { it != null && it != f.length() }
+                (checkNow && remoteSize().let { it != null && it != f.length() })
             if (stale) {
                 try { download(f) } catch (e: Exception) { if (!f.exists()) throw e }
             }
