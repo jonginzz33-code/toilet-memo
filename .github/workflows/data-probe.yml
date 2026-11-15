@@ -14,7 +14,7 @@ jobs:
           curl -sSL -o p.gz https://github.com/jonginzz33-code/toilet-memo/releases/download/public-data/public-toilets.json.gz
           Q='[out:json][timeout:250];(node["amenity"="toilets"](33,124,38.7,132);way["amenity"="toilets"](33,124,38.7,132););out center tags;'
           for u in https://overpass-api.de/api/interpreter https://overpass.kumi.systems/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do
-            curl -sS -m 300 "$u" --data-urlencode "data=$Q" -o osm.json; head -c 200 osm.json; echo
+            curl -sS -m 300 -A "toilet-map-data/1.0" "$u" --data-urlencode "data=$Q" -o osm.json; head -c 200 osm.json; echo
             python3 -c "import json;json.load(open('osm.json'))" 2>/dev/null && break
           done
           ls -la osm.json
