@@ -1,0 +1,41 @@
+name: Tmap probe
+
+# 임시: 티맵 키가 어떤 이름으로 들어 있는지, 화장실 장소 검색이 되는지 확인 (읽기만)
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          K1: ${{ secrets.TMAP_KEY }}
+          K2: ${{ secrets.TMAP_APP_KEY }}
+          K3: ${{ secrets.TMAP_APPKEY }}
+          K4: ${{ secrets.TMAP_API_KEY }}
+          K5: ${{ secrets.TMAP }}
+          K6: ${{ secrets.SK_KEY }}
+          K7: ${{ secrets.SKT_KEY }}
+          K8: ${{ secrets.TMAPKEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.parse
+          names = dict(K1="TMAP_KEY", K2="TMAP_APP_KEY", K3="TMAP_APPKEY", K4="TMAP_API_KEY", K5="TMAP", K6="SK_KEY", K7="SKT_KEY", K8="TMAPKEY")
+          for env, name in names.items():
+              k = os.environ.get(env, "").strip()
+              print(name, "set" if k else "-")
+              if not k: continue
+              for path, q in (("/tmap/pois", dict(version=1, searchKeyword="화장실", centerLat=37.318, centerLon=126.845, radius=2, count=200, page=1)),
+                              ("/tmap/pois/search/around", dict(version=1, categories="화장실", centerLat=37.318, centerLon=126.845, radius=2, count=200, page=1))):
+                  u = "https://apis.openapi.sk.com" + path + "?" + urllib.parse.urlencode(q)
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request(u, headers={"appKey": k, "Accept": "application/json"}), timeout=30) as r:
+                          d = json.loads(r.read() or b"{}")
+                      sp = d.get("searchPoiInfo", {})
+                      pois = sp.get("pois", {}).get("poi", [])
+                      print(" ", path, "total", sp.get("totalCount"), "got", len(pois))
+                      for p in pois[:15]:
+                          print("   ", p.get("name"), "|", p.get("upperBizName"), ">", p.get("middleBizName"), ">", p.get("lowerBizName"), ">", p.get("detailBizName"), "|", p.get("noorLat"), p.get("noorLon"))
+                  except urllib.error.HTTPError as e:
+                      print(" ", path, "HTTP", e.code, e.read()[:200].decode("utf-8", "replace").replace("{", "(").replace("}", ")"))
+          PY
