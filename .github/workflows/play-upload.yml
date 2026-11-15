@@ -54,7 +54,7 @@ jobs:
                             json={"track": t, "releases": [{"name": os.environ["VN"], "versionCodes": [str(vc)], "status": "completed"}]})
                   print(t, r.status_code, r.text[:300]); r.raise_for_status()
               r = s.post(f"{base}/{edit}:commit")
-              print("commit", tracks, r.status_code, r.text[:300]); r.raise_for_status()
+              print("commit", tracks, r.status_code, r.text[:600].replace("{", "(").replace("}", ")")); r.raise_for_status()
 
           # 내부 테스트 + 비공개 테스트(지인 테스트). 비공개 쪽이 막히면 내부 테스트만이라도
           try:
