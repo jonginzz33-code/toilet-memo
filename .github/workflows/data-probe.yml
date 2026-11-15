@@ -12,7 +12,11 @@ jobs:
           KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
         run: |
           curl -sSL -o p.gz https://github.com/jonginzz33-code/toilet-memo/releases/download/public-data/public-toilets.json.gz
-          curl -sS -m 300 https://overpass-api.de/api/interpreter --data-urlencode 'data=[out:json][timeout:250];area["ISO3166-1"="KR"]->.a;(node["amenity"="toilets"](area.a);way["amenity"="toilets"](area.a););out center tags;' -o osm.json
+          Q='[out:json][timeout:250];(node["amenity"="toilets"](33,124,38.7,132);way["amenity"="toilets"](33,124,38.7,132););out center tags;'
+          for u in https://overpass-api.de/api/interpreter https://overpass.kumi.systems/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do
+            curl -sS -m 300 "$u" --data-urlencode "data=$Q" -o osm.json; head -c 200 osm.json; echo
+            python3 -c "import json;json.load(open('osm.json'))" 2>/dev/null && break
+          done
           ls -la osm.json
           python3 - <<'PY'
           import json, gzip, math, os, urllib.request, urllib.parse
