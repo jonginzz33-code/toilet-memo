@@ -1,0 +1,32 @@
+name: Data source probe
+
+# 임시: 화장실 데이터를 더 받을 수 있는 곳이 있는지 확인 (읽기만)
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
+        run: |
+          K=fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da
+          echo "== 경기 Publtolt (키 없이)"; curl -sS -m 30 "https://openapi.gg.go.kr/Publtolt?Type=json&pIndex=1&pSize=2" | head -c 700; echo
+          echo "== 전국 표준데이터 API"; curl -sS -m 30 "https://api.data.go.kr/openapi/tn_pubr_public_toilet_api?serviceKey=$K&pageNo=1&numOfRows=1&type=json" | head -c 900; echo
+          echo "== 서울 (sample)"; curl -sS -m 30 "http://openapi.seoul.go.kr:8088/sample/json/SearchPublicToiletPOIService/1/2/" | head -c 700; echo
+          python3 - <<'PY'
+          import json, urllib.request, urllib.parse, os
+          k = os.environ["KAKAO_REST_KEY"]
+          def get(path, **q):
+              u = "https://dapi.kakao.com" + path + "?" + urllib.parse.urlencode(q)
+              return json.loads(urllib.request.urlopen(urllib.request.Request(u, headers={"Authorization": "KakaoAK " + k})).read())
+          for name, (x, y) in {"안산일동": (126.845, 37.318), "산본": (126.93, 37.36), "강남역": (127.0276, 37.4979)}.items():
+              for qy in ("화장실", "개방화장실", "공중화장실", "공용화장실", "남자화장실", "여자화장실"):
+                  r = get("/v2/local/search/keyword.json", query=qy, x=x, y=y, radius=2000)
+                  cats = {d["category_name"].split(" > ")[-1] for d in r["documents"]}
+                  print(name, qy, r["meta"]["total_count"], sorted(cats)[:6])
+              for code in ("OL7", "SW8"):
+                  r = get("/v2/local/search/category.json", category_group_code=code, x=x, y=y, radius=2000)
+                  print(name, code, r["meta"]["total_count"])
+          PY
