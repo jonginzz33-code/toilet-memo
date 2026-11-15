@@ -1,0 +1,27 @@
+name: Migrate group codes
+
+# 한 번만: 기존 그룹의 초대 코드를 groupCodes/{코드} → {gid} 로 복사 (새 보안 규칙용). 여러 번 돌려도 같음
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          pip install -q google-cloud-firestore
+          python3 - <<'PY'
+          import json, os
+          from google.cloud import firestore
+          from google.oauth2 import service_account
+          info = json.loads(os.environ["FIREBASE_SA"])
+          db = firestore.Client(project=info["project_id"], credentials=service_account.Credentials.from_service_account_info(info))
+          n = 0
+          for g in db.collection("groups").stream():
+              code = (g.to_dict() or {}).get("code")
+              if code:
+                  db.collection("groupCodes").document(code).set({"gid": g.id}); n += 1
+          print("migrated", n)
+          PY

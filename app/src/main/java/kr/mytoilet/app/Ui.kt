@@ -144,6 +144,8 @@ fun Context.field(label: String, hint: String, value: String = "", multi: Boolea
         inputType = if (multi) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         else InputType.TYPE_CLASS_TEXT
         if (!multi) maxLines = 1
+        // 글자 수 제한 (서버도 500자까지만 받음)
+        filters = arrayOf(android.text.InputFilter.LengthFilter(if (multi) 500 else 100))
     }
     box.add(et)
     return box to et

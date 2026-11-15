@@ -123,14 +123,18 @@ object Cloud {
         val ref = db.collection("groups").document()
         ref.set(mapOf("name" to name, "owner" to u, "code" to code, "members" to listOf(u), "subs" to emptyList<String>(),
             "names" to mapOf(u to myName), "created" to System.currentTimeMillis())).await()
+        db.collection("groupCodes").document(code).set(mapOf("gid" to ref.id)).await()
         return Group(ref.id, name, u, code, listOf(u), emptyList(), mapOf(u to myName))
     }
 
     /** 코드로 가입 요청. 결과 문구를 돌려줌 */
     suspend fun requestJoin(code: String): String {
         val u = uid ?: return "로그인이 필요해요"
-        val q = db.collection("groups").whereEqualTo("code", code.trim().uppercase()).limit(1).get().await()
-        val d = q.documents.firstOrNull() ?: return "그런 코드의 그룹이 없어요"
+        // 코드 → 그룹 id (모든 그룹 목록은 볼 수 없게 막아 둠)
+        val gid = db.collection("groupCodes").document(code.trim().uppercase()).get().await().getString("gid")
+            ?: return "그런 코드의 그룹이 없어요"
+        val d = db.collection("groups").document(gid).get().await()
+        if (!d.exists()) return "그런 코드의 그룹이 없어요"
         val g = toGroup(d)
         if (u in g.members) return "이미 '${g.name}' 그룹에 들어가 있어요"
         val cfg = groupConfig()
@@ -151,11 +155,7 @@ object Cloud {
         val cfg = groupConfig()
         val fresh = toGroup(db.collection("groups").document(g.id).get().await())
         if (fresh.members.size >= fresh.limit(cfg.defaultMax)) return "그룹이 꽉 찼어요 (${fresh.members.size}/${fresh.limit(cfg.defaultMax)}명)"
-        val theirs = db.collection("groups").whereArrayContains("members", r.uid).get().await().size()
-        if (theirs >= cfg.maxGroups) {
-            rejectJoin(g.id, r.uid)
-            return "${r.name}님은 이미 그룹 ${cfg.maxGroups}개에 들어가 있어서 받을 수 없어요"
-        }
+        // 상대가 든 그룹 수는 가입 요청 때 확인함 (남의 그룹 목록은 보안 규칙상 볼 수 없음)
         db.collection("groups").document(g.id).update(mapOf("members" to FieldValue.arrayUnion(r.uid), "names.${r.uid}" to r.name)).await()
         rejectJoin(g.id, r.uid)
         return null
@@ -183,7 +183,10 @@ object Cloud {
     /** 초대 코드 새로 만들기 (방장만) */
     suspend fun newGroupCode(gid: String): String {
         val c = newCode()
+        val old = db.collection("groups").document(gid).get().await().getString("code")
+        db.collection("groupCodes").document(c).set(mapOf("gid" to gid)).await()
         db.collection("groups").document(gid).update("code", c).await()
+        old?.let { try { db.collection("groupCodes").document(it).delete().await() } catch (_: Exception) {} }
         return c
     }
 
@@ -197,6 +200,9 @@ object Cloud {
     }
 
     suspend fun deleteGroup(id: String) {
+        db.collection("groups").document(id).get().await().getString("code")?.let {
+            try { db.collection("groupCodes").document(it).delete().await() } catch (_: Exception) {}
+        }
         for (sub in listOf("toilets", "requests")) {
             val tl = db.collection("groups").document(id).collection(sub).get().await()
             for (d in tl.documents) d.reference.delete().await()

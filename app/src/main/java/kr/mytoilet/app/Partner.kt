@@ -130,7 +130,7 @@ object Partners {
         val batch = db.batch()
         for ((id, counts) in copy) {
             val data = HashMap<String, Any>()
-            counts.forEach { (k, v) -> data[k] = FieldValue.increment(v) }
+            counts.forEach { (k, v) -> data[k] = FieldValue.increment(v.coerceAtMost(100)) }   // 서버 규칙: 한 번에 100까지
             data["partnerId"] = id
             data["month"] = m
             batch.set(db.collection("partnerStats").document("${id}_$m"), data, SetOptions.merge())
