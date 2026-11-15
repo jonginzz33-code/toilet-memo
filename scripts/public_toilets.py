@@ -196,6 +196,80 @@ def geocode(items):
     return miss
 
 
+# ---------- 카카오 지도 '화장실' 장소로 빈 곳 채우기 (개방화장실·공원 화장실 등) ----------
+
+def kakao_rect(rect, key, page):
+    u = "https://dapi.kakao.com/v2/local/search/keyword.json?" + urllib.parse.urlencode(
+        {"query": "화장실", "rect": ",".join(f"{v:.6f}" for v in rect), "page": page, "size": 15})
+    req = urllib.request.Request(u, headers={"Authorization": "KakaoAK " + key})
+    for i in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise SystemExit(f"카카오 키 오류 HTTP {e.code}")
+            time.sleep(2 * (i + 1))
+        except Exception:
+            time.sleep(2 * (i + 1))
+    return {"documents": [], "meta": {"total_count": 0, "is_end": True}}
+
+
+def kakao_toilets():
+    """전국을 칸으로 나눠 '화장실' 검색. 한 칸 결과가 45개를 넘으면 4칸으로 쪼갬 (카카오는 45개까지만 줌)"""
+    key = os.environ.get("KAKAO_REST_KEY", "").strip()
+    if not key:
+        return []
+    found, calls = {}, [0]
+
+    def search(rect):
+        out, page = [], 1
+        while True:
+            d = kakao_rect(rect, key, page); calls[0] += 1
+            out += d["documents"]
+            if page == 1 and d["meta"]["total_count"] > 45 and rect[2] - rect[0] > 0.002:
+                return None, d["meta"]["total_count"]
+            if d["meta"].get("is_end", True) or page >= 3:
+                return out, 0
+            page += 1
+
+    todo = [(x / 4, y / 4, x / 4 + 0.25, y / 4 + 0.25) for x in range(124 * 4, 132 * 4) for y in range(33 * 4, 39 * 4)]
+    while todo:
+        nxt = []
+        with ThreadPoolExecutor(8) as ex:
+            for rect, (docs, _) in zip(todo, ex.map(search, todo)):
+                if docs is None:
+                    x1, y1, x2, y2 = rect; mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+                    nxt += [(x1, y1, mx, my), (mx, y1, x2, my), (x1, my, mx, y2), (mx, my, x2, y2)]
+                    continue
+                for d in docs:
+                    if d.get("category_name", "").endswith("화장실"):
+                        found[d["id"]] = d
+        print("kakao rects", len(todo), "-> split", len(nxt), "found", len(found), "calls", calls[0], flush=True)
+        todo = nxt
+    return [{"id": "k" + d["id"], "name": d["place_name"], "addr": d.get("road_address_name") or d.get("address_name", ""),
+             "lotno": d.get("address_name", ""), "lat": round(float(d["y"]), 6), "lon": round(float(d["x"]), 6),
+             "open": "", "flags": []} for d in found.values()]
+
+
+def add_kakao(items):
+    """공공데이터에 이미 있는 곳(40m 안)은 빼고 더함"""
+    grid = {}
+    for it in items:
+        grid.setdefault((round(it["lat"], 3), round(it["lon"], 3)), []).append(it)
+    added = 0
+    for k in kakao_toilets():
+        dup = False
+        for dy in (-0.001, 0, 0.001):
+            for dx in (-0.001, 0, 0.001):
+                for p in grid.get((round(k["lat"] + dy, 3), round(k["lon"] + dx, 3)), []):
+                    if abs(p["lat"] - k["lat"]) * 111000 < 40 and abs(p["lon"] - k["lon"]) * 88000 < 40:
+                        dup = True
+        if not dup:
+            items.append(k); added += 1
+    print("kakao added", added)
+
+
 def main(out):
     seen, items, page, total = set(), [], 1, -1
     while page <= 200:
@@ -222,6 +296,7 @@ def main(out):
     miss = geocode(items)
     items = [it for it in items if it["lat"] is not None]
     print("with coords", len(items), "missing", len(miss))
+    add_kakao(items)
     if len(items) < 1000:
         raise SystemExit(f"너무 적어요 ({len(items)}개). 저장 안 함")
     body = json.dumps({"updated": time.strftime("%Y-%m-%d"), "items": items, "miss": miss}, ensure_ascii=False, separators=(",", ":"))
