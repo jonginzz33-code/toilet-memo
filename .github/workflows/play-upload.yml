@@ -41,7 +41,7 @@ jobs:
           pkg = "kr.mytoilet.app"
           base = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{pkg}/edits"
 
-          def publish(tracks):
+          def publish(tracks, closed_status="completed"):
               edit = s.post(base).json()["id"]
               with open("out/toilet-memo-play.aab", "rb") as f:
                   r = s.post(f"https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/{pkg}/edits/{edit}/bundles?uploadType=media",
@@ -51,15 +51,16 @@ jobs:
               vc = os.environ["VC"] if r.status_code != 200 and "already" in r.text else (r.raise_for_status() or r.json()["versionCode"])
               for t in tracks:
                   r = s.put(f"{base}/{edit}/tracks/{urllib.parse.quote(t)}",
-                            json={"track": t, "releases": [{"name": os.environ["VN"], "versionCodes": [str(vc)], "status": "completed"}]})
+                            json={"track": t, "releases": [{"name": os.environ["VN"], "versionCodes": [str(vc)], "status": "completed" if t == "internal" else closed_status}]})
                   print(t, r.status_code, r.text[:300]); r.raise_for_status()
               r = s.post(f"{base}/{edit}:commit")
               print("commit", tracks, r.status_code, r.text[:600].replace("{", "(").replace("}", ")")); r.raise_for_status()
 
-          # 내부 테스트 + 비공개 테스트(지인 테스트). 비공개 쪽이 막히면 내부 테스트만이라도
-          try:
-              publish(["internal", "지인 테스트"])
-          except Exception as e:
-              print("closed testing failed, internal only:", e)
-              publish(["internal"])
+          # 내부 테스트 + 비공개 테스트(지인 테스트).
+          # 앱이 첫 심사 전이면 비공개 쪽은 '초안'으로만 올릴 수 있음 → Play Console에서 '검토를 위해 앱 전송'을 눌러야 함
+          for args in ((["internal", "지인 테스트"],), (["internal", "지인 테스트"], "draft"), (["internal"],)):
+              try:
+                  publish(*args); break
+              except Exception as e:
+                  print("failed", args, e)
           PY
