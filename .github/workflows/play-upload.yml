@@ -19,6 +19,7 @@ jobs:
         run: |
           gh release download --repo "$GITHUB_REPOSITORY" --pattern 'toilet-memo-play.aab' --dir out
           echo "VN=$(gh release view --repo "$GITHUB_REPOSITORY" --json name -q .name)" >> $GITHUB_ENV
+          echo "VC=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName | sed 's/build-//')" >> $GITHUB_ENV
 
       - name: Service account email (Play Console 에 초대할 주소)
         env:
@@ -45,8 +46,9 @@ jobs:
               with open("out/toilet-memo-play.aab", "rb") as f:
                   r = s.post(f"https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/{pkg}/edits/{edit}/bundles?uploadType=media",
                              data=f, headers={"Content-Type": "application/octet-stream"}, timeout=600)
-              print("upload", r.status_code, r.text[:300]); r.raise_for_status()
-              vc = r.json()["versionCode"]
+              print("upload", r.status_code, r.text[:300])
+              # 이미 올린 버전이면(다시 돌릴 때) 올린 걸 그대로 씀
+              vc = os.environ["VC"] if r.status_code != 200 and "already" in r.text else (r.raise_for_status() or r.json()["versionCode"])
               for t in tracks:
                   r = s.put(f"{base}/{edit}/tracks/{urllib.parse.quote(t)}",
                             json={"track": t, "releases": [{"name": os.environ["VN"], "versionCodes": [str(vc)], "status": "completed"}]})
