@@ -25,11 +25,39 @@ jobs:
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
         run: printf '%s' "$FIREBASE_SA" | jq -r .client_email
 
-      - uses: r0adkll/upload-google-play@v1.1.3
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.FIREBASE_SA }}
-          packageName: kr.mytoilet.app
-          releaseFiles: out/toilet-memo-play.aab
-          releaseName: ${{ env.VN }}
-          track: internal
-          status: completed
+      - name: Upload to internal + closed testing
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          pip install -q google-auth requests
+          python3 - <<'PY'
+          import json, os, urllib.parse
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          cred = service_account.Credentials.from_service_account_info(
+              json.loads(os.environ["FIREBASE_SA"]), scopes=["https://www.googleapis.com/auth/androidpublisher"])
+          s = AuthorizedSession(cred)
+          pkg = "kr.mytoilet.app"
+          base = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{pkg}/edits"
+
+          def publish(tracks):
+              edit = s.post(base).json()["id"]
+              with open("out/toilet-memo-play.aab", "rb") as f:
+                  r = s.post(f"https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/{pkg}/edits/{edit}/bundles?uploadType=media",
+                             data=f, headers={"Content-Type": "application/octet-stream"}, timeout=600)
+              print("upload", r.status_code, r.text[:300]); r.raise_for_status()
+              vc = r.json()["versionCode"]
+              for t in tracks:
+                  r = s.put(f"{base}/{edit}/tracks/{urllib.parse.quote(t)}",
+                            json={"track": t, "releases": [{"name": os.environ["VN"], "versionCodes": [str(vc)], "status": "completed"}]})
+                  print(t, r.status_code, r.text[:300]); r.raise_for_status()
+              r = s.post(f"{base}/{edit}:commit")
+              print("commit", tracks, r.status_code, r.text[:300]); r.raise_for_status()
+
+          # 내부 테스트 + 비공개 테스트(지인 테스트). 비공개 쪽이 막히면 내부 테스트만이라도
+          try:
+              publish(["internal", "지인 테스트"])
+          except Exception as e:
+              print("closed testing failed, internal only:", e)
+              publish(["internal"])
+          PY
