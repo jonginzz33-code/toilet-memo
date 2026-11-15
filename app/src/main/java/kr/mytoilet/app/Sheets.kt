@@ -1249,6 +1249,15 @@ object Sheets {
         val newInq = try { Inquiry.threads().count { it.unreadAdmin } } catch (_: Exception) { 0 }
         box.add(a.btn("💬 문의함" + if (newInq > 0) " · 새 문의 $newInq" else "", if (newInq > 0) C.RED else C.BLUE, Color.WHITE) { inquiryList(a) })
 
+        // 공중화장실 데이터 (총관리자): 누르면 모든 사용자가 다음에 앱을 켤 때 새 데이터를 받음
+        box.add(a.text("🚻 공중화장실 데이터", 16f, C.TEXT, 800))
+        box.add(a.text("안 눌러도 한 달마다 저절로 새로 받아요.", 12f, C.TEXT3))
+        box.add(a.btn("모두에게 새 데이터 보내기", C.BLUE, Color.WHITE) {
+            a.confirm("새 데이터 보내기", "모든 사용자가 다음에 앱을 켤 때 공중화장실 데이터를 새로 받아요 (약 2MB).", "보내기") {
+                a.lifecycleScope.launch { try { Cloud.pushPublicVersion(); a.toast("보냈어요. 앱을 다시 켜면 받아요") } catch (e: Exception) { a.toast("실패: ${e.message}") } }
+            }
+        })
+
         // 공지 팝업 (총관리자): 올리면 모든 사용자가 앱을 켤 때 한 번 봄
         box.add(a.text("📢 공지 팝업", 16f, C.TEXT, 800))
         val cur = Cloud.notice()

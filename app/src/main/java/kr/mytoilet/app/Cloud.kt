@@ -99,6 +99,15 @@ object Cloud {
             .set(mapOf("id" to System.currentTimeMillis(), "title" to title, "body" to body)).await()
     }
 
+    /** 관리자가 공중화장실 데이터를 '모두에게 새로 보내기' 한 시각 (config/publicData) */
+    suspend fun publicVersion(): Long = try {
+        db.collection("config").document("publicData").get().await().getLong("version") ?: 0L
+    } catch (_: Exception) { 0L }
+
+    suspend fun pushPublicVersion() {
+        db.collection("config").document("publicData").set(mapOf("version" to System.currentTimeMillis())).await()
+    }
+
     suspend fun setGroupMax(id: String, max: Int) {
         db.collection("groups").document(id).update("maxMembers", max).await()
     }

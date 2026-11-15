@@ -324,6 +324,12 @@ class MainActivity : AppCompatActivity() {
             reloadPartners()
             checkUpdate(silent = true)
             showNotice()
+            // 관리자가 공중화장실 데이터를 새로 보냈으면 받고 지도 다시 그리기
+            val pv = Cloud.publicVersion()
+            if (pv > 0 && try { PublicData.refreshIfNewer(pv) } catch (_: Exception) { false }) {
+                Cloud.cellCache.clear()
+                onCameraEnd()
+            }
         }
         handler.postDelayed(wiggle, 500)
         takeRouteIntent(intent)
