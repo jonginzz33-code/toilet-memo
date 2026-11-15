@@ -11,22 +11,35 @@ jobs:
       - env:
           KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
         run: |
-          K=fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da
-          echo "== 경기 Publtolt (키 없이)"; curl -sS -m 30 "https://openapi.gg.go.kr/Publtolt?Type=json&pIndex=1&pSize=2" | head -c 700; echo
-          echo "== 전국 표준데이터 API"; curl -sS -m 30 "https://api.data.go.kr/openapi/tn_pubr_public_toilet_api?serviceKey=$K&pageNo=1&numOfRows=1&type=json" | head -c 900; echo
-          echo "== 서울 (sample)"; curl -sS -m 30 "http://openapi.seoul.go.kr:8088/sample/json/SearchPublicToiletPOIService/1/2/" | head -c 700; echo
+          curl -sSL -o p.gz https://github.com/jonginzz33-code/toilet-memo/releases/download/public-data/public-toilets.json.gz
+          curl -sS -m 300 https://overpass-api.de/api/interpreter --data-urlencode 'data=[out:json][timeout:250];area["ISO3166-1"="KR"]->.a;(node["amenity"="toilets"](area.a);way["amenity"="toilets"](area.a););out center tags;' -o osm.json
+          ls -la osm.json
           python3 - <<'PY'
-          import json, urllib.request, urllib.parse, os
+          import json, gzip, math, os, urllib.request, urllib.parse
+          pub = json.loads(gzip.decompress(open("p.gz","rb").read()))["items"]
+          osm = json.load(open("osm.json"))["elements"]
+          print("osm toilets", len(osm))
+          grid = {}
+          for p in pub: grid.setdefault((round(p["lat"],2), round(p["lon"],2)), []).append(p)
+          def near(la, lo):
+              best = 99999
+              for dy in (-0.01,0,0.01):
+                  for dx in (-0.01,0,0.01):
+                      for p in grid.get((round(la+dy,2), round(lo+dx,2)), []):
+                          best = min(best, math.hypot((p["lat"]-la)*111000, (p["lon"]-lo)*88000))
+              return best
+          new = [e for e in osm if near(e.get("lat") or e["center"]["lat"], e.get("lon") or e["center"]["lon"]) > 50]
+          print("osm not in our data (50m)", len(new))
+          # 충주 탄금공원 근처
+          T = (36.9925, 127.9105)
+          for e in osm:
+              la = e.get("lat") or e["center"]["lat"]; lo = e.get("lon") or e["center"]["lon"]
+              if math.hypot((la-T[0])*111000, (lo-T[1])*88000) < 2000: print("osm near 탄금", la, lo, e.get("tags",{}).get("name",""))
+          for p in pub:
+              if math.hypot((p["lat"]-T[0])*111000, (p["lon"]-T[1])*88000) < 2000: print("ours near 탄금", p["name"], p["addr"])
           k = os.environ["KAKAO_REST_KEY"]
-          def get(path, **q):
-              u = "https://dapi.kakao.com" + path + "?" + urllib.parse.urlencode(q)
-              return json.loads(urllib.request.urlopen(urllib.request.Request(u, headers={"Authorization": "KakaoAK " + k})).read())
-          for name, (x, y) in {"안산일동": (126.845, 37.318), "산본": (126.93, 37.36), "강남역": (127.0276, 37.4979)}.items():
-              for qy in ("화장실", "개방화장실", "공중화장실", "공용화장실", "남자화장실", "여자화장실"):
-                  r = get("/v2/local/search/keyword.json", query=qy, x=x, y=y, radius=2000)
-                  cats = {d["category_name"].split(" > ")[-1] for d in r["documents"]}
-                  print(name, qy, r["meta"]["total_count"], sorted(cats)[:6])
-              for code in ("OL7", "SW8"):
-                  r = get("/v2/local/search/category.json", category_group_code=code, x=x, y=y, radius=2000)
-                  print(name, code, r["meta"]["total_count"])
+          for qy in ("화장실", "개방화장실", "공중화장실"):
+              u = "https://dapi.kakao.com/v2/local/search/keyword.json?" + urllib.parse.urlencode(dict(query=qy, x=T[1], y=T[0], radius=2000))
+              r = json.loads(urllib.request.urlopen(urllib.request.Request(u, headers={"Authorization": "KakaoAK " + k})).read())
+              print("kakao 탄금", qy, [d["place_name"] for d in r["documents"]])
           PY
