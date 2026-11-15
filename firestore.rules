@@ -46,8 +46,17 @@ service cloud.firestore {
     }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     function subsOf() { return 'subs' in resource.data ? resource.data.subs : []; }
+    // 초대 코드 → 그룹 id (코드를 아는 사람만 찾을 수 있게, 목록 보기는 막음)
+    match /groupCodes/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['gid'])
+        && get(/databases/$(database)/documents/groups/$(request.resource.data.gid)).data.owner == request.auth.uid;
+      allow delete: if signedIn()
+        && get(/databases/$(database)/documents/groups/$(resource.data.gid)).data.owner == request.auth.uid;
+    }
     match /groups/{gid} {
-      allow read: if signedIn();
+      allow get: if signedIn();
+      allow list: if signedIn() && (request.auth.uid in resource.data.members || isAdmin());
       allow create: if signedIn()
         && request.resource.data.owner == request.auth.uid
         && request.resource.data.members == [request.auth.uid]
@@ -115,11 +124,13 @@ service cloud.firestore {
         return request.resource.data.keys().hasOnly(['views', 'opens', 'routes', 'visits', 'coupons', 'partnerId', 'month'])
           && exists(/databases/$(database)/documents/partners/$(request.resource.data.partnerId));
       }
+      function was(k) { return resource != null && k in resource.data ? resource.data[k] : 0; }
       function notLess(k) {
-        return !(k in resource.data) || (request.resource.data[k] is int && request.resource.data[k] >= resource.data[k]);
+        return !(k in request.resource.data) || (request.resource.data[k] is int
+          && request.resource.data[k] >= was(k) && request.resource.data[k] <= was(k) + 100);
       }
       allow read: if isAdmin();
-      allow create: if okKeys();
+      allow create: if okKeys() && notLess('views') && notLess('opens') && notLess('routes') && notLess('visits') && notLess('coupons');
       allow update: if okKeys() && notLess('views') && notLess('opens') && notLess('routes') && notLess('visits') && notLess('coupons');
       allow delete: if isAdmin();
     }
@@ -138,34 +149,45 @@ service cloud.firestore {
     }
 
     // 사용불가 신고 · 다시 열림
+    function myDoc(id) { return id.matches('.*_' + request.auth.uid); }
     match /unavail/{id} {
       allow read: if true;
-      allow create, update: if own();
+      allow create, update: if own() && myDoc(id)
+        && request.resource.data.reason is string && request.resource.data.reason.size() <= 100;
       allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
     match /status/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['reopenAt', 'by', 'visitAt', 'visitBy'])
+        && (request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly(['reopenAt', 'by'])
+              && request.resource.data.by == request.auth.uid
+            || request.resource.data.diff(resource == null ? {} : resource.data).affectedKeys().hasOnly(['visitAt', 'visitBy'])
+              && request.resource.data.visitBy == request.auth.uid);
     }
 
     // 상태 투표 (깨끗해요 · 보통 · 별로예요)
     match /votes/{id} {
       allow read: if true;
-      allow create, update: if own();
+      allow create, update: if own() && myDoc(id);
       allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
     // 사용자 메모
+    function memoOk() {
+      return request.resource.data.text is string && request.resource.data.text.size() <= 500
+        && (!('nick' in request.resource.data) || request.resource.data.nick.size() <= 40);
+    }
     match /memos/{id} {
       allow read: if true;
-      allow create: if own();
-      allow update: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if own() && memoOk();
+      allow update: if signedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid && memoOk();
       allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
     // 메모 신고 (관리자만 보기)
     match /memoReports/{id} {
-      allow create: if own();
+      allow create: if own() && myDoc(id) && request.resource.data.text.size() <= 500;
       allow read, delete: if isAdmin();
     }
   }
