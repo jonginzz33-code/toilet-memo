@@ -12,7 +12,7 @@ import java.util.zip.GZIPInputStream
 
 /**
  * 공중화장실 데이터: GitHub가 매달 공공 API에서 받아 둔 파일을 내려받아 폰에 저장해 씀.
- * 로그인·관리자 작업 없이 누구나 볼 수 있음. 7일마다 새 파일이 있는지 확인.
+ * 로그인·관리자 작업 없이 누구나 볼 수 있음. 앱을 켤 때마다 새 파일이 올라왔는지(크기가 다른지) 확인.
  */
 object PublicData {
     private const val URL_FILE =
@@ -41,7 +41,8 @@ object PublicData {
         if (System.currentTimeMillis() - failedAt < 10 * 60 * 1000) throw IllegalStateException("잠시 후 다시")
         try { withContext(Dispatchers.IO) {
             val f = file
-            val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > REFRESH_MS
+            val stale = !f.exists() || System.currentTimeMillis() - f.lastModified() > REFRESH_MS ||
+                remoteSize().let { it != null && it != f.length() }
             if (stale) {
                 try { download(f) } catch (e: Exception) { if (!f.exists()) throw e }
             }
@@ -54,12 +55,20 @@ object PublicData {
         }
     }
 
-    private fun download(f: File) {
+    /** 서버 파일 크기 (못 알아내면 null → 지금 파일 그대로 씀) */
+    private fun remoteSize(): Long? = try {
+        // HEAD는 GitHub 파일 서버가 막아서, 첫 1바이트만 받아 'bytes 0-0/전체크기'로 알아냄
+        val con = open(range = true)
+        con.getHeaderField("Content-Range")?.substringAfter('/')?.toLongOrNull().also { con.disconnect() }
+    } catch (_: Exception) { null }
+
+    private fun open(range: Boolean = false): HttpURLConnection {
         var url = URL_FILE
         var con: HttpURLConnection
         var hops = 0
         while (true) {
             con = URL(url).openConnection() as HttpURLConnection
+            if (range) con.setRequestProperty("Range", "bytes=0-0")
             con.instanceFollowRedirects = false
             con.connectTimeout = 15000
             con.readTimeout = 60000
@@ -68,8 +77,12 @@ object PublicData {
                 url = con.getHeaderField("Location"); con.disconnect(); hops++; continue
             }
             if (code !in 200..299) { con.disconnect(); throw IllegalStateException("공중화장실 파일 HTTP $code") }
-            break
+            return con
         }
+    }
+
+    private fun download(f: File) {
+        val con = open()
         val tmp = File(f.parentFile, f.name + ".tmp")
         con.inputStream.use { inp -> tmp.outputStream().use { inp.copyTo(it) } }
         con.disconnect()
