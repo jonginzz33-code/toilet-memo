@@ -198,9 +198,9 @@ def geocode(items):
 
 # ---------- 카카오 지도 '화장실' 장소로 빈 곳 채우기 (개방화장실·공원 화장실 등) ----------
 
-def kakao_rect(rect, key, page):
+def kakao_rect(rect, key, page, query):
     u = "https://dapi.kakao.com/v2/local/search/keyword.json?" + urllib.parse.urlencode(
-        {"query": "화장실", "rect": ",".join(f"{v:.6f}" for v in rect), "page": page, "size": 15})
+        {"query": query, "rect": ",".join(f"{v:.6f}" for v in rect), "page": page, "size": 15})
     req = urllib.request.Request(u, headers={"Authorization": "KakaoAK " + key})
     for i in range(4):
         try:
@@ -222,10 +222,10 @@ def kakao_toilets():
         return []
     found, calls = {}, [0]
 
-    def search(rect):
+    def search(rect, query):
         out, page = [], 1
         while True:
-            d = kakao_rect(rect, key, page); calls[0] += 1
+            d = kakao_rect(rect, key, page, query); calls[0] += 1
             out += d["documents"]
             if page == 1 and d["meta"]["total_count"] > 45 and rect[2] - rect[0] > 0.002:
                 return None, d["meta"]["total_count"]
@@ -233,11 +233,21 @@ def kakao_toilets():
                 return out, 0
             page += 1
 
+    # '화장실'만으로는 '개방화장실'(상가 건물)·'공중화장실' 일부가 안 잡혀서 3가지로 검색
+    for query in ("화장실", "개방화장실", "공중화장실"):
+        scan(search, query, found)
+    print("kakao calls", calls[0])
+    return [{"id": "k" + d["id"], "name": d["place_name"], "addr": d.get("road_address_name") or d.get("address_name", ""),
+             "lotno": d.get("address_name", ""), "lat": round(float(d["y"]), 6), "lon": round(float(d["x"]), 6),
+             "open": "", "flags": []} for d in found.values()]
+
+
+def scan(search, query, found):
     todo = [(x / 4, y / 4, x / 4 + 0.25, y / 4 + 0.25) for x in range(124 * 4, 132 * 4) for y in range(33 * 4, 39 * 4)]
     while todo:
         nxt = []
         with ThreadPoolExecutor(8) as ex:
-            for rect, (docs, _) in zip(todo, ex.map(search, todo)):
+            for rect, (docs, _) in zip(todo, ex.map(lambda rc: search(rc, query), todo)):
                 if docs is None:
                     x1, y1, x2, y2 = rect; mx, my = (x1 + x2) / 2, (y1 + y2) / 2
                     nxt += [(x1, y1, mx, my), (mx, y1, x2, my), (x1, my, mx, y2), (mx, my, x2, y2)]
@@ -245,20 +255,53 @@ def kakao_toilets():
                 for d in docs:
                     if d.get("category_name", "").endswith("화장실"):
                         found[d["id"]] = d
-        print("kakao rects", len(todo), "-> split", len(nxt), "found", len(found), "calls", calls[0], flush=True)
+        print("kakao", query, "rects", len(todo), "-> split", len(nxt), "found", len(found), flush=True)
         todo = nxt
-    return [{"id": "k" + d["id"], "name": d["place_name"], "addr": d.get("road_address_name") or d.get("address_name", ""),
-             "lotno": d.get("address_name", ""), "lat": round(float(d["y"]), 6), "lon": round(float(d["x"]), 6),
-             "open": "", "flags": []} for d in found.values()]
+
+
+# ---------- 오픈스트리트맵 화장실: 공원 안 화장실처럼 정확한 자리가 찍혀 있는 곳 ----------
+# 공공데이터는 좌표가 없어 주소로 자리를 찾는데, 큰 공원은 화장실 여러 개가 다 공원 주소 한 점에 모임
+
+OSM_Q = '[out:json][timeout:250];area["ISO3166-1"="KR"]->.a;(node["amenity"="toilets"](area.a);way["amenity"="toilets"](area.a););out center tags;'
+OSM_URLS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
+
+
+def osm_toilets():
+    body = urllib.parse.urlencode({"data": OSM_Q}).encode()
+    for u in OSM_URLS:
+        try:
+            req = urllib.request.Request(u, data=body, headers={"User-Agent": "toilet-map-data/1.0"})
+            with urllib.request.urlopen(req, timeout=320) as r:
+                els = json.loads(r.read().decode("utf-8"))["elements"]
+            break
+        except Exception as e:
+            print("osm fail", u, e, flush=True)
+    else:
+        return []
+    out = []
+    for e in els:
+        t = e.get("tags", {})
+        la = e.get("lat") or e.get("center", {}).get("lat")
+        lo = e.get("lon") or e.get("center", {}).get("lon")
+        if la is None or t.get("access") in ("private", "no", "customers"):
+            continue
+        flags = []
+        if t.get("wheelchair") == "yes": flags.append("장애인용")
+        if t.get("changing_table") == "yes": flags.append("기저귀 교환대")
+        out.append({"id": f"o{e['type'][0]}{e['id']}", "name": t.get("name:ko") or t.get("name") or "공중화장실",
+                    "addr": t.get("addr:full", ""), "lotno": "", "lat": round(la, 6), "lon": round(lo, 6),
+                    "open": "상시" if t.get("opening_hours") == "24/7" else t.get("opening_hours", ""), "flags": flags})
+    print("osm toilets", len(out))
+    return out
 
 
 def add_kakao(items):
-    """공공데이터에 이미 있는 곳(40m 안)은 빼고 더함"""
+    """오픈스트리트맵·카카오 화장실 중 이미 있는 곳(40m 안)은 빼고 더함"""
     grid = {}
     for it in items:
         grid.setdefault((round(it["lat"], 3), round(it["lon"], 3)), []).append(it)
     added = 0
-    for k in kakao_toilets():
+    for k in osm_toilets() + kakao_toilets():
         dup = False
         for dy in (-0.001, 0, 0.001):
             for dx in (-0.001, 0, 0.001):
@@ -267,7 +310,8 @@ def add_kakao(items):
                         dup = True
         if not dup:
             items.append(k); added += 1
-    print("kakao added", added)
+            grid.setdefault((round(k["lat"], 3), round(k["lon"], 3)), []).append(k)
+    print("added", added)
 
 
 def main(out):
