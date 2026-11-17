@@ -1,0 +1,17 @@
+name: Store data probe
+
+# 임시: 소상공인 상권정보 API 확인 (읽기만)
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          K=fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da
+          B=https://apis.data.go.kr/B553077/api/open/sdsc2
+          echo "== 반경"; curl -sS -m 60 "$B/storeListInRadius?serviceKey=$K&pageNo=1&numOfRows=2&radius=500&cx=126.845&cy=37.318&type=json" | head -c 2500; echo
+          echo "== 시도(경기 41) 전체 수"; curl -sS -m 60 "$B/storeListInDong?serviceKey=$K&pageNo=1&numOfRows=1&divId=ctprvnCd&key=41&type=json" | head -c 600; echo
+          echo "== 업종 대분류"; curl -sS -m 60 "$B/largeUpjongList?serviceKey=$K&type=json" | head -c 1500; echo
+          echo "== 기준 시점"; curl -sS -m 60 "$B/baroApi?serviceKey=$K&resId=dong&catId=mega&type=json" | head -c 300; echo
