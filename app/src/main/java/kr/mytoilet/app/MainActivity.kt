@@ -576,6 +576,19 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed({ onCameraEnd() }, 400)
     }
 
+    private var storeLabel: Label? = null
+
+    /** 우리 동네에서 고른 가게를 지도에 표시하고 그리로 이동 (따라가기는 끔) */
+    fun showStore(st: StoreData.Store) {
+        val layer = map?.labelManager?.layer ?: return
+        storeLabel?.let { try { layer.remove(it) } catch (_: Exception) {} }
+        val (bmp, ay) = Icons.storePin(this, "${StoreData.emoji(st.kind)} ${st.name}")
+        storeLabel = layer.addLabel(LabelOptions.from("store", LatLng.from(st.lat, st.lon))
+            .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(900L))
+        if (following) setFollow(false)
+        move(st.lat, st.lon, 17)
+    }
+
     private fun move(lat: Double, lon: Double, zoom: Int? = null) {
         val m = map ?: return
         lastProgMove = System.currentTimeMillis()

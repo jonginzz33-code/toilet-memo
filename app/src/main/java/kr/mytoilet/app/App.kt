@@ -8,6 +8,7 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         PublicData.dir = filesDir
+        StoreData.dir = filesDir
         KakaoMapSdk.init(this, BuildConfig.KAKAO_KEY)
         Fonts.load(this)
     }

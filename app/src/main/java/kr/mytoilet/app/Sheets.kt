@@ -1026,6 +1026,90 @@ object Sheets {
 
     // ---------------- 메뉴 ----------------
 
+    /** 우리 동네: 근처 가게 찾기 / 동네 소식(새로 생긴·목록에서 빠진 가게). 내 위치(없으면 지도 가운데) 1km 안 */
+    fun dongne(a: MainActivity) {
+        val s = Sheet(a, "🏪 우리 동네", half = true)
+        val la = a.myLat; val lo = a.myLon
+        val (clat, clon) = if (la != null && lo != null) la to lo else a.center()
+        val R = 1000.0
+        var tab = 0
+        var kind = "cafe"
+        var area: StoreData.Area? = null
+        val cats = a.hbox(6)
+        val box = a.vbox(8)
+        val info = a.text("가게 정보 받는 중…", 13f, C.TEXT3)
+
+        fun row(st: StoreData.Store, d: Double, chip: View?) = a.hbox(10).apply {
+            background = a.round(0xFFFFFFFF.toInt(), 14f)
+            setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10))
+            add(a.text(StoreData.emoji(st.kind), 20f, C.TEXT))
+            val tx = a.vbox(2)
+            tx.add(a.text(st.name, 15f, C.TEXT, 700))
+            tx.add(a.text("${st.sub} · ${Geo.fmt(d)} · ${st.addr.substringAfter(' ').substringAfter(' ')}", 12f, C.TEXT2))
+            add(tx, 1f)
+            chip?.let { add(it) }
+            setOnClickListener { s.dismiss(); a.showStore(st) }
+        }
+
+        fun ym(v: String) = if (v.length == 6) "${v.substring(0, 4)}년 ${v.substring(4).toInt()}월" else v
+
+        fun fill() {
+            box.removeAllViews()
+            val ar = area ?: return
+            val near = { st: StoreData.Store -> Geo.dist(clat, clon, st.lat, st.lon) }
+            val ok = { st: StoreData.Store -> kind == "all" || st.kind == kind }
+            if (tab == 0) {
+                val list = ar.stores.filter(ok).map { it to near(it) }.filter { it.second <= R }.sortedBy { it.second }
+                if (list.isEmpty()) box.add(a.text("1km 안에 이 종류 가게가 없어요.", 14f, C.TEXT2))
+                list.take(80).forEach { (st, d) -> box.add(row(st, d, null)) }
+                info.text = "가까운 순 · 1km 안 · ${ym(ar.stdrYm)} 상가 정보 · 누르면 지도에 표시"
+            } else {
+                if (ar.since.isBlank()) {
+                    box.add(a.text("동네 소식은 다음 상가 조사(3달마다)부터 보여요.\n지난 조사와 비교해서 새로 생긴 가게와 빠진 가게를 알려 드려요.", 14f, C.TEXT2))
+                } else {
+                    val nw = ar.stores.filter { it.id in ar.newIds && ok(it) }.map { it to near(it) }.filter { it.second <= R }.sortedBy { it.second }
+                    val gn = ar.gone.filter(ok).map { it to near(it) }.filter { it.second <= R }.sortedBy { it.second }
+                    box.add(a.text("✨ 새로 생긴 가게 ${nw.size}", 15f, C.TEXT, 800))
+                    if (nw.isEmpty()) box.add(a.text("없어요", 13f, C.TEXT3))
+                    nw.take(40).forEach { (st, d) -> box.add(row(st, d, a.chip("NEW", C.GREEN_BG, C.GREEN_TEXT))) }
+                    box.add(a.text("🚪 목록에서 빠진 가게 ${gn.size}", 15f, C.TEXT, 800))
+                    if (gn.isEmpty()) box.add(a.text("없어요", 13f, C.TEXT3))
+                    gn.take(40).forEach { (st, d) -> box.add(row(st, d, a.chip("확인 필요", C.GRAY_BG, C.TEXT2))) }
+                }
+                info.text = "${ym(ar.since)} → ${ym(ar.stdrYm)} 상가 조사 비교 · 1km 안\n'목록에서 빠진 가게'는 문을 닫았을 수 있지만 확실하지 않아요"
+            }
+        }
+
+        fun paintCats() {
+            cats.removeAllViews()
+            val opts = (if (tab == 1) listOf("all" to "전체") else emptyList()) + StoreData.KINDS
+            for ((k, label) in opts) {
+                val on = k == kind
+                cats.add(a.chip(label, if (on) C.BLUE else C.GRAY_BG, if (on) Color.WHITE else C.TEXT2).apply {
+                    setPadding(a.dp(12), a.dp(6), a.dp(12), a.dp(6))
+                    setOnClickListener { kind = k; paintCats(); fill() }
+                })
+            }
+        }
+
+        s.add(a.segmented(listOf("근처 가게 찾기", "동네 소식"), 0) {
+            tab = it
+            if (tab == 0 && kind == "all") kind = "cafe"
+            if (tab == 1) kind = "all"
+            paintCats(); fill()
+        })
+        s.add(android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(cats) })
+        s.add(box)
+        s.add(info)
+        paintCats()
+        s.show()
+        a.lifecycleScope.launch {
+            area = try { StoreData.around(clat, clon, R) } catch (_: Exception) { null }
+            if (area == null || area!!.stores.isEmpty()) info.text = "가게 정보를 받지 못했어요. 인터넷을 확인하고 다시 열어 주세요."
+            else fill()
+        }
+    }
+
     fun menu(a: MainActivity) {
         val s = Sheet(a, "메뉴", half = true)
         // 계정
@@ -1042,6 +1126,7 @@ object Sheets {
         }
         s.add(acc)
 
+        s.add(a.btn("🏪 우리 동네 · 근처 가게 · 새로 생긴 가게", C.BLUE_BG, C.BLUE_TEXT) { s.dismiss(); dongne(a) })
         s.add(a.btn("📁 나의 화장실") { s.dismiss(); myToilets(a) })
         s.add(a.btn("👥 그룹 관리") { Login.need(a, "그룹을 쓰려면") { s.dismiss(); groups(a) } })
 

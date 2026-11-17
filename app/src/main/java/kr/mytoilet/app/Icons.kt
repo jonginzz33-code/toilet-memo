@@ -87,6 +87,24 @@ object Icons {
         return bmp
     }
 
+    /** 우리 동네 가게 표시: 이름 말풍선 + 아래 동그라미 점. 반환: (그림, 점 중심의 y 비율) */
+    fun storePin(ctx: Context, label: String): Pair<Bitmap, Float> {
+        val d = ctx.resources.displayMetrics.density
+        val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 13 * d; typeface = Fonts.bold; textAlign = Paint.Align.CENTER; color = 0xFF222222.toInt() }
+        val w = tp.measureText(label) + 20 * d
+        val lh = 26 * d; val r = 8 * d
+        val h = lh + 6 * d + r * 2 + 2 * d
+        val bmp = Bitmap.createBitmap(w.toInt(), h.toInt(), Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp); val cx = w / 2
+        c.drawRoundRect(RectF(1f, 1f, w - 1, lh), 12 * d, 12 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; setShadowLayer(3 * d, 0f, d, 0x33000000) })
+        val fm = tp.fontMetrics
+        c.drawText(label, cx, lh / 2 - (fm.ascent + fm.descent) / 2, tp)
+        val cy = lh + 6 * d + r
+        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF8B5A2B.toInt() })
+        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.5f * d; color = Color.WHITE })
+        return bmp to cy / h
+    }
+
     /** 화장실 추가·옮기기 때 화면 가운데 큰 빨간 핀. 핀 끝이 정확한 자리. 반환: (그림, 핀 끝의 y 위치) */
     fun placePin(ctx: Context): Pair<Bitmap, Float> {
         val d = ctx.resources.displayMetrics.density
