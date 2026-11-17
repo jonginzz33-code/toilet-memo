@@ -1,0 +1,32 @@
+name: Store data
+
+# '우리 동네' 가게 데이터: 매달 확인 (상권정보는 분기마다 바뀜) → 'store-data' 릴리스
+on:
+  schedule:
+    - cron: '41 19 3 * *'
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - scripts/stores.py
+      - .github/workflows/store-data.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch
+        run: python3 scripts/stores.py store-out
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view store-data >/dev/null 2>&1 || \
+            gh release create store-data --title "우리 동네 가게 데이터" --notes "앱이 자동으로 내려받는 파일이에요" --prerelease --latest=false
+          ls store-out | wc -l
+          gh release upload store-data store-out/* --clobber
