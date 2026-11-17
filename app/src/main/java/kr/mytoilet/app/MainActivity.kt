@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
                 when {
                     placing -> exitPlacing()
                     routeTarget != null -> clearRoute()
-                    else -> confirm("앱을 종료할까요?", "앱을 닫아요.", "종료") { finish() }
+                    else -> confirm("앱을 종료할까요?", "나만의 화장실을 닫아요.", "종료") { finish() }
                 }
             }
         })
@@ -362,7 +362,7 @@ class MainActivity : AppCompatActivity() {
             elevation = dpf(3f)
         }
         val titleBox = vbox(0)
-        titleBox.add(text("🚻 급해요 화장실 찾기", 16f, C.TEXT, 700))
+        titleBox.add(text("🚻 나만의 화장실", 16f, C.TEXT, 700))
         countText = text("", 12f, C.TEXT2)
         titleBox.add(countText)
         bar.add(titleBox, 1f)
