@@ -289,6 +289,18 @@ object Cloud {
     }
 
     @Suppress("UNCHECKED_CAST")
+    /** 최근 60일 평점이 4점 이상인 화장실 id.
+     *  shortcut: 최근 60일 평가를 전부 읽음, 평가가 수천 건 넘으면 화장실별 합계 문서로 바꾸기 */
+    suspend fun topRated(): Set<String> {
+        val since = System.currentTimeMillis() - 60 * DAY
+        return db.collection("votes").whereGreaterThan("at", since).get().await().documents
+            .groupBy { it.getString("toiletId") ?: "" }
+            .filter { (id, ds) ->
+                val sc = ds.mapNotNull { when (it.getLong("v")?.toInt()) { 0 -> 5.0; 1 -> 3.0; 2 -> 1.0; else -> null } }
+                id.isNotEmpty() && sc.isNotEmpty() && sc.average() >= 4.0
+            }.keys
+    }
+
     suspend fun votes(toiletId: String): Votes {
         val since = System.currentTimeMillis() - 60 * DAY
         val docs = db.collection("votes").whereEqualTo("toiletId", toiletId).get().await().documents

@@ -12,8 +12,8 @@ import kotlin.math.max
 /** 지도 표시 그림 */
 object Icons {
 
-    /** 남녀 그림 화장실 표시 + 아래 이름표. unavailable>0 이면 빨간 사용불가 표시 */
-    fun toilet(ctx: Context, color: Int, label: String, unavailable: Int = 0, outline: Boolean = false, scale: Float = 1f): Bitmap {
+    /** 남녀 그림 화장실 표시 + 아래 이름표. unavailable>0 이면 빨간 사용불가 표시, star 면 왼쪽 위에 노란 별 */
+    fun toilet(ctx: Context, color: Int, label: String, unavailable: Int = 0, outline: Boolean = false, scale: Float = 1f, star: Boolean = false): Bitmap {
         val d = ctx.resources.displayMetrics.density * scale
         val red = unavailable > 0
         val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -27,12 +27,13 @@ object Icons {
         val ring = if (red) 12 * d else 0f
         val labelW = labelPaint.measureText(label) + 14 * d
         val labelH = 19 * d
-        val w = max(boxW + ring * 2, labelW) + 8 * d
-        val h = ring + boxH + 3 * d + labelH + 8 * d + ring
+        val sp = if (star) 8 * d else 0f     // 별이 잘리지 않게 위·옆 여백
+        val w = max(boxW + ring * 2, labelW) + 8 * d + sp * 2
+        val h = sp + ring + boxH + 3 * d + labelH + 8 * d + ring
         val bmp = Bitmap.createBitmap(w.toInt(), h.toInt(), Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val cx = w / 2
-        val top = ring + 4 * d
+        val top = sp + ring + 4 * d
         val box = RectF(cx - boxW / 2, top, cx + boxW / 2, top + boxH)
 
         if (red) {
@@ -71,6 +72,14 @@ object Icons {
             }
             val fm = tp.fontMetrics
             c.drawText(if (unavailable > 9) "9+" else unavailable.toString(), bx, by - (fm.ascent + fm.descent) / 2, tp)
+        }
+
+        if (star) {
+            c.drawCircle(box.left, box.top, 10 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = 0xFFF5B800.toInt() })
+            c.drawCircle(box.left, box.top, 10 * d, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2 * d; this.color = Color.WHITE })
+            val st = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 13 * d; typeface = Fonts.bold; textAlign = Paint.Align.CENTER; this.color = Color.WHITE }
+            val fm = st.fontMetrics
+            c.drawText("★", box.left, box.top - (fm.ascent + fm.descent) / 2, st)
         }
 
         val lb = RectF(cx - labelW / 2, box.bottom + 3 * d, cx + labelW / 2, box.bottom + 3 * d + labelH)
@@ -251,12 +260,13 @@ object Icons {
     }
 
     /** 기준점(그림 가운데)의 세로 위치 비율 */
-    fun toiletAnchorY(ctx: Context, unavailable: Int): Float {
+    fun toiletAnchorY(ctx: Context, unavailable: Int, star: Boolean = false): Float {
         val d = ctx.resources.displayMetrics.density
         val ring = if (unavailable > 0) 12 * d else 0f
+        val sp = if (star) 8 * d else 0f
         val boxH = 34 * d
-        val h = ring + boxH + 3 * d + 19 * d + 8 * d + ring
-        return (ring + 4 * d + boxH / 2) / h
+        val h = sp + ring + boxH + 3 * d + 19 * d + 8 * d + ring
+        return (sp + ring + 4 * d + boxH / 2) / h
     }
 
     /** 남자·여자 그림 */

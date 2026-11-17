@@ -248,6 +248,7 @@ class MainActivity : AppCompatActivity() {
     var groupToilets: List<Toilet> = emptyList()
     var publics: List<PublicToilet> = emptyList()
     var unavail: Map<String, Cloud.Unavail> = emptyMap()
+    var topRated: Set<String> = emptySet()   // 평점 4점 이상 공중화장실 (지도에 별)
     /** 진짜 총관리자인지 (서버 확인) */
     var realAdmin = false
     /** 지금 관리자 화면으로 보는지: 총관리자 + 맨 위 '관리자' 스위치 켜짐. 끄면 일반 사용자 화면 */
@@ -665,9 +666,9 @@ class MainActivity : AppCompatActivity() {
         var unavailIn = 0
         val scale = iconScale()
 
-        fun addLabel(id: String, lat: Double, lon: Double, color: Int, label: String, outline: Boolean, un: Int, target: Any) {
-            val bmp = Icons.toilet(this, color, label, un, outline, scale)
-            val ay = Icons.toiletAnchorY(this, un)
+        fun addLabel(id: String, lat: Double, lon: Double, color: Int, label: String, outline: Boolean, un: Int, target: Any, star: Boolean = false) {
+            val bmp = Icons.toilet(this, color, label, un, outline, scale, star)
+            val ay = Icons.toiletAnchorY(this, un, star)
             val opt = LabelOptions.from(id, LatLng.from(lat, lon))
                 .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay)))
                 .setClickable(true)
@@ -689,7 +690,7 @@ class MainActivity : AppCompatActivity() {
             val n = u?.count ?: 0
             if (n > 0) unavailIn++
             val label = if (n > 0) "사용불가 ${n}건 · ${Geo.ago(u!!.last)}" else "공중화장실"
-            addLabel("p_${p.id}", p.lat, p.lon, C.GRAY, label, true, n, p)
+            addLabel("p_${p.id}", p.lat, p.lon, C.GRAY, label, true, n, p, p.id in topRated)
             shown++
         }
         for (t in groupToilets) {
@@ -1205,6 +1206,7 @@ class MainActivity : AppCompatActivity() {
 
     suspend fun refreshUnavailable() {
         unavail = try { Cloud.unavailable() } catch (e: Exception) { emptyMap() }
+        topRated = try { Cloud.topRated() } catch (e: Exception) { emptySet() }
         drawToilets()
     }
 

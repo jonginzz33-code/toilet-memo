@@ -915,7 +915,7 @@ object Sheets {
             if (mineV < 0) { a.toast("먼저 깨끗해요/보통/별로예요 중 하나를 눌러 주세요"); return }
             Login.need(a, "평가하려면") {
                 a.lifecycleScope.launch {
-                    try { Cloud.vote(p.id, mineV, chosen.toList()); a.toast("평가를 저장했어요") } catch (e: Exception) { a.toast("실패: ${e.message}") }
+                    try { Cloud.vote(p.id, mineV, chosen.toList()); a.toast("평가를 저장했어요"); a.refreshUnavailable() } catch (e: Exception) { a.toast("실패: ${e.message}") }
                 }
             }
         }
