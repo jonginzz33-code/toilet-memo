@@ -9,9 +9,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          K=fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da
-          B=https://apis.data.go.kr/B553077/api/open/sdsc2
-          echo "== 반경"; curl -sS -m 60 "$B/storeListInRadius?serviceKey=$K&pageNo=1&numOfRows=2&radius=500&cx=126.845&cy=37.318&type=json" | head -c 2500; echo
-          echo "== 시도(경기 41) 전체 수"; curl -sS -m 60 "$B/storeListInDong?serviceKey=$K&pageNo=1&numOfRows=1&divId=ctprvnCd&key=41&type=json" | head -c 600; echo
-          echo "== 업종 대분류"; curl -sS -m 60 "$B/largeUpjongList?serviceKey=$K&type=json" | head -c 1500; echo
-          echo "== 기준 시점"; curl -sS -m 60 "$B/baroApi?serviceKey=$K&resId=dong&catId=mega&type=json" | head -c 300; echo
+          python3 - <<'PY'
+          import json, urllib.request, time
+          K = "fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da"
+          B = "https://apis.data.go.kr/B553077/api/open/sdsc2/"
+          def get(p):
+              for i in range(3):
+                  try:
+                      with urllib.request.urlopen(B + p + f"&serviceKey={K}&type=json", timeout=90) as r:
+                          return json.loads(r.read())
+                  except Exception as e:
+                      print("retry", p[:60], e); time.sleep(3)
+          d = get("smallUpjongList?x=1")
+          for it in d["body"]["items"]:
+              n = it["indsSclsNm"]
+              if any(w in n for w in ("커피", "카페", "편의점", "약국", "안경", "꽃", "화초", "제과", "빵", "분식", "한식", "치킨", "피자", "패스트")):
+                  print("CODE", it["indsSclsCd"], it["indsMclsNm"], ">", n)
+          t = time.time()
+          d = get("storeListInDong?divId=signguCd&key=41273&pageNo=1&numOfRows=1000")
+          print("안산 단원구 total", d["body"].get("totalCount"), "rows", len(d["body"]["items"]), "sec", round(time.time()-t, 1))
+          d = get("storeListInDong?divId=ctprvnCd&key=41&pageNo=1&numOfRows=1")
+          print("경기 total", d and d["body"].get("totalCount"))
+          d = get("storeListInDong?divId=ctprvnCd&key=11&pageNo=1&numOfRows=1")
+          print("서울 total", d and d["body"].get("totalCount"))
+          PY
