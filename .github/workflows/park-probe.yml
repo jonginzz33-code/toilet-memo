@@ -1,0 +1,15 @@
+name: Parking probe
+
+# 임시: 주차장·충전소 API 확인 (읽기만)
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          K=fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da
+          echo "== 주차장"; curl -sS -m 90 "https://api.data.go.kr/openapi/tn_pubr_prkplce_info_api?serviceKey=$K&pageNo=1&numOfRows=1&type=json" | head -c 1800; echo
+          echo "== 충전소 개수(경기)"; curl -sS -m 90 "https://apis.data.go.kr/B552584/EvCharger/getChargerInfo?serviceKey=$K&pageNo=1&numOfRows=1&zcode=41&dataType=JSON" | python3 -c "import sys,json;d=json.load(sys.stdin);print('totalCount',d.get('totalCount'))"
+          echo "== 충전소 상태 개수"; curl -sS -m 90 "https://apis.data.go.kr/B552584/EvCharger/getChargerStatus?serviceKey=$K&pageNo=1&numOfRows=1&period=5&dataType=JSON" | head -c 500; echo
