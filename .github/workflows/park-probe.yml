@@ -1,0 +1,24 @@
+name: Parking probe
+
+# 임시: 주차장·충전소 API 페이지와 주소 확인 (읽기만)
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for u in https://www.data.go.kr/data/15012896/openapi.do https://www.data.go.kr/data/15076352/openapi.do; do
+            echo "== $u"
+            curl -sSL -m 60 -A "Mozilla/5.0" "$u" | python3 -c "
+          import sys,re,html
+          t=sys.stdin.read()
+          print('title', re.findall(r'<title>(.*?)</title>', t, re.S)[:1])
+          print('활용신청' in t, '오픈API' in t)
+          for m in sorted(set(re.findall(r'https?://(?:apis?|openapi)\.data\.go\.kr/[A-Za-z0-9_/.-]+', t)))[:10]: print('URL', m)
+          "
+          done
+          K=fa4fc859cd80c582d1cbf58943b918023182ed5d6e5f8d2f00b40dfdbcc0e9da
+          echo "== 주차장 API 키 시험"; curl -sS -m 60 "https://api.data.go.kr/openapi/tn_pubr_prkplce_info_api?serviceKey=$K&pageNo=1&numOfRows=1&type=json" | head -c 600; echo
+          echo "== 충전소 API 키 시험"; curl -sS -m 60 "https://apis.data.go.kr/B552584/EvCharger/getChargerInfo?serviceKey=$K&pageNo=1&numOfRows=1&dataType=JSON" | head -c 600; echo
