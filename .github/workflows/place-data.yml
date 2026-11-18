@@ -1,0 +1,30 @@
+name: Parking and EV data
+
+# 주차장·전기차 충전소 데이터: 매달 → 'store-data' 릴리스 (park.json.gz, ev_tile_*.json.gz)
+on:
+  schedule:
+    - cron: '23 20 4 * *'
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - scripts/places.py
+      - .github/workflows/place-data.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch
+        run: python3 scripts/places.py place-out
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls place-out | wc -l
+          gh release upload store-data place-out/* --clobber
