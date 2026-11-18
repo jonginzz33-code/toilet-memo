@@ -1110,6 +1110,115 @@ object Sheets {
         }
     }
 
+    /** 목록 창 공통: 위에 골라 보기 칩, 아래 줄 목록. 내 위치(없으면 지도 가운데) 1km 안 */
+    private fun nearCenter(a: MainActivity): Pair<Double, Double> {
+        val la = a.myLat; val lo = a.myLon
+        return if (la != null && lo != null) la to lo else a.center()
+    }
+
+    private fun placeRow(a: MainActivity, s: Sheet, emoji: String, title: String, sub: String, right: String, chip: View?, onClick: () -> Unit) =
+        a.hbox(10).apply {
+            background = a.round(0xFFFFFFFF.toInt(), 14f)
+            setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10))
+            add(a.text(emoji, 20f, C.TEXT))
+            val tx = a.vbox(2)
+            tx.add(a.text(title, 15f, C.TEXT, 700))
+            tx.add(a.text(sub, 12f, C.TEXT2))
+            add(tx, 1f)
+            val rc = a.vbox(3).apply { gravity = Gravity.END }
+            rc.add(a.text(right, 13f, C.BLUE_DARK, 700, Gravity.END))
+            chip?.let { rc.add(it) }
+            add(rc)
+            setOnClickListener { s.dismiss(); onClick() }
+        }
+
+    private fun chipRow(a: MainActivity, opts: List<String>, sel: () -> Int, onPick: (Int) -> Unit): LinearLayout {
+        val row = a.hbox(6)
+        fun paint() {
+            row.removeAllViews()
+            opts.forEachIndexed { i, label ->
+                val on = i == sel()
+                row.add(a.chip(label, if (on) C.BLUE else C.GRAY_BG, if (on) Color.WHITE else C.TEXT2).apply {
+                    setPadding(a.dp(12), a.dp(6), a.dp(12), a.dp(6))
+                    setOnClickListener { onPick(i); paint() }
+                })
+            }
+        }
+        paint()
+        return row
+    }
+
+    /** 🅿️ 근처 주차장 (전국주차장정보, 실시간 빈자리 없음) */
+    fun parking(a: MainActivity) {
+        val s = Sheet(a, "🅿️ 근처 주차장", half = true)
+        val (clat, clon) = nearCenter(a)
+        var f = 0
+        var list: List<PlaceData.Park> = emptyList()
+        val box = a.vbox(8)
+        val info = a.text("주차장 정보 받는 중…", 13f, C.TEXT3)
+        fun fill() {
+            box.removeAllViews()
+            val shown = list.filter { when (f) { 1 -> it.fee == "무료"; 2 -> it.se == "공영"; 3 -> it.hours == "24시간"; else -> true } }
+                .map { it to Geo.dist(clat, clon, it.lat, it.lon) }.sortedBy { it.second }
+            if (shown.isEmpty()) box.add(a.text("1km 안에 조건에 맞는 주차장이 없어요.", 14f, C.TEXT2))
+            for ((p, d) in shown.take(80)) {
+                val sub = listOf(p.se, p.type, if (p.spaces > 0) "${p.spaces}면" else "", p.hours).filter { it.isNotBlank() }.joinToString(" · ")
+                val fee = p.fee + if (p.day.isNotBlank()) " · 1일 ${p.day}" else ""
+                box.add(placeRow(a, s, "🅿️", p.name, sub, Geo.fmt(d),
+                    a.chip(fee, if (p.fee == "무료") C.GREEN_BG else C.GRAY_BG, if (p.fee == "무료") C.GREEN_TEXT else C.TEXT2)) {
+                    a.showPlace("🅿️ ${p.name}", p.lat, p.lon)
+                })
+            }
+            info.text = "가까운 순 · 1km 안 · 누르면 지도에 표시\n실시간 빈자리는 전국 데이터가 없어서 안 나와요"
+        }
+        s.add(chipRow(a, listOf("전체", "무료만", "공영만", "24시간"), { f }) { f = it; fill() })
+        s.add(box); s.add(info)
+        s.show()
+        a.lifecycleScope.launch {
+            list = try { PlaceData.parksNear(clat, clon, 1000.0) } catch (_: Exception) { emptyList() }
+            fill()
+        }
+    }
+
+    /** ⚡ 근처 전기차 충전소 (가까운 10곳은 지금 빈 충전기 수도) */
+    fun chargers(a: MainActivity) {
+        val s = Sheet(a, "⚡ 근처 충전소", half = true)
+        val (clat, clon) = nearCenter(a)
+        var f = 0
+        var list: List<PlaceData.Station> = emptyList()
+        var live: Map<String, PlaceData.Live> = emptyMap()
+        val box = a.vbox(8)
+        val info = a.text("충전소 정보 받는 중…", 13f, C.TEXT3)
+        fun fill() {
+            box.removeAllViews()
+            val shown = list.filter { when (f) { 1 -> it.fast > 0; 2 -> (live[it.id]?.free ?: 0) > 0; else -> true } }
+                .map { it to Geo.dist(clat, clon, it.lat, it.lon) }.sortedBy { it.second }
+            if (shown.isEmpty()) box.add(a.text(if (f == 2) "지금 빈 충전기가 있는 곳이 없어요 (가까운 10곳 기준)." else "1km 안에 충전소가 없어요.", 14f, C.TEXT2))
+            for ((st, d) in shown.take(80)) {
+                val sub = listOf(if (st.fast > 0) "급속 ${st.fast}" else "", if (st.slow > 0) "완속 ${st.slow}" else "", st.useTime)
+                    .filter { it.isNotBlank() }.joinToString(" · ")
+                val l = live[st.id]
+                val chip = when {
+                    l == null -> null
+                    l.free > 0 -> a.chip("빈 곳 ${l.free}" + if (l.broken > 0) " · 고장 ${l.broken}" else "", C.GREEN_BG, C.GREEN_TEXT)
+                    l.busy > 0 -> a.chip("모두 충전 중", C.RED_BG, C.RED_TEXT)
+                    else -> a.chip("상태 모름", C.GRAY_BG, C.TEXT2)
+                }
+                box.add(placeRow(a, s, "⚡", st.name, sub, Geo.fmt(d), chip) { a.showPlace("⚡ ${st.name}", st.lat, st.lon) })
+            }
+            info.text = "가까운 순 · 1km 안 · 가까운 10곳은 지금 빈 충전기 수 표시\n누르면 지도에 표시"
+        }
+        s.add(chipRow(a, listOf("전체", "급속만", "지금 빈 곳"), { f }) { f = it; fill() })
+        s.add(box); s.add(info)
+        s.show()
+        a.lifecycleScope.launch {
+            list = try { PlaceData.stationsNear(clat, clon, 1000.0) } catch (_: Exception) { emptyList() }
+            fill()
+            val near = list.sortedBy { Geo.dist(clat, clon, it.lat, it.lon) }.take(10).map { it.id }
+            if (near.isNotEmpty()) { live = PlaceData.live(near); fill() }
+        }
+    }
+
     fun menu(a: MainActivity) {
         val s = Sheet(a, "메뉴", half = true)
         // 계정
@@ -1140,6 +1249,10 @@ object Sheets {
             a.prefs.showPublic = it
             a.onCameraEnd()
         })
+        s.add(a.text("첫 화면 왼쪽 퀵바", 12f, C.TEXT2, 600))
+        s.add(a.toggleRow("🏪 우리 동네", a.prefs.qDongne) { a.prefs.qDongne = it; a.refreshLeftBar() })
+        s.add(a.toggleRow("🅿️ 주차장", a.prefs.qPark) { a.prefs.qPark = it; a.refreshLeftBar() })
+        s.add(a.toggleRow("⚡ 충전소", a.prefs.qEv) { a.prefs.qEv = it; a.refreshLeftBar() })
         s.add(a.text("내 위치 캐릭터", 12f, C.TEXT2, 600))
         s.add(a.segmented(listOf("동글이", "휴지 친구", "물방울이"), a.prefs.character) {
             a.prefs.character = it

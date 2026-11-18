@@ -219,6 +219,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var followBtn: ImageView
     private lateinit var loading: LinearProgressIndicator
     private lateinit var rightCol: LinearLayout
+    private lateinit var leftCol: LinearLayout
 
     lateinit var local: LocalStore
     lateinit var prefs: Prefs
@@ -442,9 +443,15 @@ class MainActivity : AppCompatActivity() {
         // 버튼 줄은 '화장실 추가' 버튼 바로 아래부터 (위쪽과 겹치지 않게)
         val colLp = FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.TOP).apply { marginEnd = dp(12) }
         root.addView(rightCol, colLp)
+        // 왼쪽 퀵바: 흰 동그라미 (우리 동네 · 주차장 · 충전소)
+        leftCol = vbox(0)
+        val leftLp = FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.TOP).apply { marginStart = dp(12) }
+        root.addView(leftCol, leftLp)
+        refreshLeftBar()
         topBox.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
             val top = v.bottom + dp(10)
             if (colLp.topMargin != top) { colLp.topMargin = top; rightCol.layoutParams = colLp }
+            if (leftLp.topMargin != top) { leftLp.topMargin = top; leftCol.layoutParams = leftLp }
         }
 
         // 아래쪽
@@ -580,14 +587,38 @@ class MainActivity : AppCompatActivity() {
     private var storeLabel: Label? = null
 
     /** 우리 동네에서 고른 가게를 지도에 표시하고 그리로 이동 (따라가기는 끔) */
-    fun showStore(st: StoreData.Store) {
+    fun showStore(st: StoreData.Store) = showPlace("${StoreData.emoji(st.kind)} ${st.name}", st.lat, st.lon)
+
+    /** 가게·주차장·충전소를 지도에 이름표로 표시하고 그리로 이동 (따라가기는 끔) */
+    /** 왼쪽 퀵바 다시 그리기 (설정에서 켜고 끌 때) */
+    fun refreshLeftBar() {
+        leftCol.removeAllViews()
+        fun add(emoji: String, label: String, onClick: () -> Unit) {
+            leftCol.addView(text(emoji, 20f, C.TEXT, 400, Gravity.CENTER).apply {
+                background = android.graphics.drawable.GradientDrawable().apply { shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(Color.WHITE) }
+                elevation = dpf(4f)
+                contentDescription = label
+                setOnClickListener { onClick() }
+            }, LinearLayout.LayoutParams(dp(42), dp(42)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+            leftCol.addView(text(label, 11f, C.BLUE_DARK, 600, Gravity.CENTER).apply {
+                background = round(Color.WHITE, 99f)
+                elevation = dpf(2f)
+                setPadding(dp(7), dp(1), dp(7), dp(1))
+            }, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(3); bottomMargin = dp(7) })
+        }
+        if (prefs.qDongne) add("🏪", "우리 동네") { Sheets.dongne(this) }
+        if (prefs.qPark) add("🅿️", "주차장") { Sheets.parking(this) }
+        if (prefs.qEv) add("⚡", "충전소") { Sheets.chargers(this) }
+    }
+
+    fun showPlace(label: String, lat: Double, lon: Double) {
         val layer = map?.labelManager?.layer ?: return
         storeLabel?.let { try { layer.remove(it) } catch (_: Exception) {} }
-        val (bmp, ay) = Icons.storePin(this, "${StoreData.emoji(st.kind)} ${st.name}")
-        storeLabel = layer.addLabel(LabelOptions.from("store", LatLng.from(st.lat, st.lon))
+        val (bmp, ay) = Icons.storePin(this, label)
+        storeLabel = layer.addLabel(LabelOptions.from("store", LatLng.from(lat, lon))
             .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(900L))
         if (following) setFollow(false)
-        move(st.lat, st.lon, 17)
+        move(lat, lon, 17)
     }
 
     private fun move(lat: Double, lon: Double, zoom: Int? = null) {
@@ -1108,6 +1139,7 @@ class MainActivity : AppCompatActivity() {
         addBtn.visibility = View.GONE
         urgentBtn.visibility = View.GONE
         rightCol.visibility = View.GONE
+        leftCol.visibility = View.GONE
         hint.text = "지도를 움직여 빨간 표시를 화장실 자리에 맞추세요"
     }
 
@@ -1120,6 +1152,7 @@ class MainActivity : AppCompatActivity() {
         addBtn.visibility = View.VISIBLE
         urgentBtn.visibility = View.VISIBLE
         rightCol.visibility = View.VISIBLE
+        leftCol.visibility = View.VISIBLE
         hint.text = "두 손가락으로 확대·축소"
     }
 

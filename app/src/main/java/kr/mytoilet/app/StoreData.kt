@@ -28,19 +28,23 @@ object StoreData {
     private const val TILE = 0.2
     lateinit var dir: File
 
-    private fun tileName(lat: Double, lon: Double) =
-        "tile_${Math.floor(lat / TILE).toInt()}_${Math.floor(lon / TILE).toInt()}.json.gz"
-
-    /** (lat, lon) 둘레 radiusM 안을 덮는 칸들을 받아 합침 */
-    suspend fun around(lat: Double, lon: Double, radiusM: Double): Area = withContext(Dispatchers.IO) {
+    /** (lat, lon) 둘레 radiusM 을 덮는 0.2도 칸 파일 이름들 */
+    fun tilesAround(lat: Double, lon: Double, radiusM: Double, prefix: String): Set<String> {
         val dLat = radiusM / 111000.0
         val dLon = radiusM / (111000.0 * Math.cos(Math.toRadians(lat)))
         val names = linkedSetOf<String>()
-        for (y in listOf(lat - dLat, lat, lat + dLat)) for (x in listOf(lon - dLon, lon, lon + dLon)) names.add(tileName(y, x))
+        for (y in listOf(lat - dLat, lat, lat + dLat)) for (x in listOf(lon - dLon, lon, lon + dLon))
+            names.add("$prefix${Math.floor(y / TILE).toInt()}_${Math.floor(x / TILE).toInt()}.json.gz")
+        return names
+    }
+
+    /** (lat, lon) 둘레 radiusM 안을 덮는 칸들을 받아 합침 */
+    suspend fun around(lat: Double, lon: Double, radiusM: Double): Area = withContext(Dispatchers.IO) {
+        val names = tilesAround(lat, lon, radiusM, "tile_")
         val stores = ArrayList<Store>(); val newIds = HashSet<String>(); val gone = ArrayList<Store>()
         var stdr = ""; var since = ""
         for (n in names) {
-            val o = load(n) ?: continue
+            val o = loadFile(n) ?: continue
             stdr = o.optString("stdrYm"); since = o.optString("since").takeIf { it != "null" } ?: ""
             val arr = o.getJSONArray("stores")
             for (i in 0 until arr.length()) stores.add(store(arr.getJSONArray(i)))
@@ -54,7 +58,7 @@ object StoreData {
         a.getDouble(4), a.getDouble(5), a.optString(6))
 
     /** 칸 파일: 폰에 있으면 그걸, 없거나 30일 지났으면 새로 받음. 바다처럼 파일이 없는 칸은 null */
-    private fun load(name: String): JSONObject? {
+    fun loadFile(name: String): JSONObject? {
         val f = File(dir, "stores_$name")
         if (!f.exists() || System.currentTimeMillis() - f.lastModified() > KEEP_MS) {
             try { download(BASE + name, f) } catch (_: Exception) { if (!f.exists()) return null }
