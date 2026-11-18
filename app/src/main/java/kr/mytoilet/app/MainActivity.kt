@@ -729,10 +729,8 @@ class MainActivity : AppCompatActivity() {
         // 종류: 0 공공(회색) 1 내 것(주황) 2 그룹(보라) 3 제휴(초록)
         val items = ArrayList<Triple<Int, Double, Double>>()
         var unavailIn = 0
-        val starred = ArrayList<PublicToilet>()   // 별 화장실은 묶지 않고 따로 보여 줌
         for (p in publics) if (Geo.dist(clat, clon, p.lat, p.lon) <= limit) {
-            if (p.id in topRated) starred.add(p) else items.add(Triple(0, p.lat, p.lon))
-            if ((unavail[p.id]?.count ?: 0) > 0) unavailIn++
+            items.add(Triple(0, p.lat, p.lon)); if ((unavail[p.id]?.count ?: 0) > 0) unavailIn++
         }
         if (showMine) for (t in mine) if (Geo.dist(clat, clon, t.lat, t.lon) <= limit) items.add(Triple(1, t.lat, t.lon))
         if (showGroup) for (t in groupToilets) if (Geo.dist(clat, clon, t.lat, t.lon) <= limit) items.add(Triple(2, t.lat, t.lon))
@@ -756,18 +754,7 @@ class MainActivity : AppCompatActivity() {
                 .setRank(if (key.first == 0) 1L else 50L)
             layer.addLabel(opt)?.let { toiletLabels.add(it); labelTargets[id] = Cluster(lat, lon) }
         }
-        val sc = iconScale()
-        for (p in starred) {
-            val un = unavail[p.id]?.count ?: 0
-            val id = "p_${p.id}"
-            val opt = LabelOptions.from(id, LatLng.from(p.lat, p.lon))
-                .setStyles(LabelStyles.from(LabelStyle.from(Icons.toilet(this, C.GRAY, "공중화장실", un, true, sc, true))
-                    .setAnchorPoint(0.5f, Icons.toiletAnchorY(this, un, true))))
-                .setClickable(true).setRank(60L)
-            layer.addLabel(opt)?.let { toiletLabels.add(it); labelTargets[id] = p }
-        }
-        val total = items.size + starred.size
-        countText.text = if (prefs.circleOnly) "원 안 화장실 ${total}곳" else "근처 화장실 ${total}곳"
+        countText.text = if (prefs.circleOnly) "원 안 화장실 ${items.size}곳" else "근처 화장실 ${items.size}곳"
         unavailChip.text = "근처 사용불가 ${unavailIn}곳"
         unavailChip.visibility = if (unavailIn > 0) View.VISIBLE else View.GONE
     }
