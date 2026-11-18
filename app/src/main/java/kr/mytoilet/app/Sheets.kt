@@ -516,7 +516,7 @@ object Sheets {
         root.add(a.text("🎁 ${p.couponText}", 26f, C.AMBER_TEXT, 800, Gravity.CENTER).apply {
             background = a.round(0xFFFFFFFF.toInt(), 18f, 3, C.AMBER); setPadding(a.dp(18), a.dp(22), a.dp(18), a.dp(22))
         })
-        root.add(a.text("급해요 화장실 찾기 앱 쿠폰 · ${Geo.date(System.currentTimeMillis())}", 13f, C.TEXT2, 600, Gravity.CENTER))
+        root.add(a.text("급할 때 앱 쿠폰 · ${Geo.date(System.currentTimeMillis())}", 13f, C.TEXT2, 600, Gravity.CENTER))
         root.add(a.btn("닫기") { d.dismiss() })
         d.setContentView(root)
         d.show()

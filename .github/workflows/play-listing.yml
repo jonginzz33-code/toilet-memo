@@ -1,0 +1,31 @@
+name: Play store name
+
+# 스토어 앱 이름을 docs/launch/store-listing.md 의 '앱 이름'으로 바꿈 (한국어 등록정보, 이름만)
+on:
+  workflow_dispatch:
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          pip install -q google-auth requests
+          python3 - <<'PY'
+          import json, os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          lines = open("docs/launch/store-listing.md", encoding="utf-8").read().split("\n")
+          title = lines[lines.index("## 앱 이름 (30자)") + 1].strip()
+          assert 0 < len(title) <= 30, title
+          s = AuthorizedSession(service_account.Credentials.from_service_account_info(
+              json.loads(os.environ["FIREBASE_SA"]), scopes=["https://www.googleapis.com/auth/androidpublisher"]))
+          base = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/kr.mytoilet.app/edits"
+          edit = s.post(base).json()["id"]
+          r = s.patch(f"{base}/{edit}/listings/ko-KR", json={"title": title})
+          print("listing", r.status_code, r.text[:300].replace("{", "(").replace("}", ")")); r.raise_for_status()
+          r = s.post(f"{base}/{edit}:commit")
+          print("commit", r.status_code, r.text[:300].replace("{", "(").replace("}", ")")); r.raise_for_status()
+          PY

@@ -112,7 +112,7 @@ class NearestWidget : AppWidgetProvider() {
             val p = ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE)
             val v = RemoteViews(ctx.packageName, R.layout.widget_nearest)
             val at = p.getLong("at", 0L)
-            v.setTextViewText(R.id.w_title, if (at == 0L) "🚻 급해요 화장실 찾기 · 새로고침을 눌러 주세요"
+            v.setTextViewText(R.id.w_title, if (at == 0L) "🚻 급할 때 · 새로고침을 눌러 주세요"
                 else "🚻 가까운 화장실 · " + java.text.SimpleDateFormat("a h:mm", java.util.Locale.KOREA).format(java.util.Date(at)))
 
             // 내 화장실 칸
