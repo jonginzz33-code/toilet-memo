@@ -216,6 +216,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private lateinit var hint: TextView
+    private lateinit var clearPlacesBtn: TextView
+    private val placeLabels = ArrayList<Label>()
     private lateinit var followBtn: ImageView
     private lateinit var loading: LinearProgressIndicator
     private lateinit var rightCol: LinearLayout
@@ -468,6 +470,14 @@ class MainActivity : AppCompatActivity() {
         }
         bottom.addView(urgentBtn, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.START })
         bottom.addView(hint, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        // 목록에서 '지도에서 보기'로 띄운 장소들 지우기
+        clearPlacesBtn = text("", 13f, Color.WHITE, 700, Gravity.CENTER).apply {
+            background = round(C.TEXT, 14f)
+            setPadding(dp(14), dp(7), dp(14), dp(7))
+            visibility = View.GONE
+            setOnClickListener { clearPlaces() }
+        }
+        bottom.addView(clearPlacesBtn, 1, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
         placeBar = hbox(8).apply { visibility = View.GONE }
         placeBar.add(btn("🔍 검색", C.GLASS) { searchPlace() }, 1f)
         placeBar.add(btn("취소", C.GLASS) { exitPlacing() }, 1f)
@@ -611,9 +621,38 @@ class MainActivity : AppCompatActivity() {
         if (prefs.qEv) add("⚡", "충전소") { Sheets.chargers(this) }
     }
 
+    /** 목록에서 고른 조건 그대로 여러 곳을 한꺼번에 지도에 표시하고, 모두 보이게 화면 맞춤 */
+    fun showPlaces(title: String, items: List<Triple<String, Double, Double>>) {
+        val m = map ?: return
+        val layer = m.labelManager?.layer ?: return
+        clearPlaces()
+        for ((label, lat, lon) in items) {
+            val (bmp, ay) = Icons.storePin(this, label)
+            layer.addLabel(LabelOptions.from(LatLng.from(lat, lon))
+                .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(900L))?.let { placeLabels.add(it) }
+        }
+        if (items.isEmpty()) return
+        if (following) setFollow(false)
+        lastProgMove = System.currentTimeMillis()
+        val pts = items.map { LatLng.from(it.second, it.third) } + listOfNotNull(myLat?.let { la -> myLon?.let { LatLng.from(la, it) } })
+        if (pts.size == 1) move(items[0].second, items[0].third, 17)
+        else try { m.moveCamera(CameraUpdateFactory.fitMapPoints(pts.toTypedArray(), dp(70))) } catch (_: Exception) {}
+        clearPlacesBtn.text = "$title ${items.size}곳 표시 중 · ✕ 지우기"
+        clearPlacesBtn.visibility = View.VISIBLE
+    }
+
+    fun clearPlaces() {
+        val layer = map?.labelManager?.layer
+        placeLabels.forEach { try { layer?.remove(it) } catch (_: Exception) {} }
+        placeLabels.clear()
+        storeLabel?.let { try { layer?.remove(it) } catch (_: Exception) {} }
+        storeLabel = null
+        if (::clearPlacesBtn.isInitialized) clearPlacesBtn.visibility = View.GONE
+    }
+
     fun showPlace(label: String, lat: Double, lon: Double) {
         val layer = map?.labelManager?.layer ?: return
-        storeLabel?.let { try { layer.remove(it) } catch (_: Exception) {} }
+        clearPlaces()
         val (bmp, ay) = Icons.storePin(this, label)
         storeLabel = layer.addLabel(LabelOptions.from("store", LatLng.from(lat, lon))
             .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(900L))

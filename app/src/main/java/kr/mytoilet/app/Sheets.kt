@@ -1035,6 +1035,7 @@ object Sheets {
         var tab = 0
         var kind = "cafe"
         var area: StoreData.Area? = null
+        var now: List<StoreData.Store> = emptyList()
         val cats = a.hbox(6)
         val box = a.vbox(8)
         val info = a.text("가게 정보 받는 중…", 13f, C.TEXT3)
@@ -1055,11 +1056,13 @@ object Sheets {
 
         fun fill() {
             box.removeAllViews()
+            now = emptyList()
             val ar = area ?: return
             val near = { st: StoreData.Store -> Geo.dist(clat, clon, st.lat, st.lon) }
             val ok = { st: StoreData.Store -> kind == "all" || st.kind == kind }
             if (tab == 0) {
                 val list = ar.stores.filter(ok).map { it to near(it) }.filter { it.second <= R }.sortedBy { it.second }
+                now = list.map { it.first }
                 if (list.isEmpty()) box.add(a.text("1km 안에 이 종류 가게가 없어요.", 14f, C.TEXT2))
                 list.take(80).forEach { (st, d) -> box.add(row(st, d, null)) }
                 info.text = "가까운 순 · 1km 안 · ${ym(ar.stdrYm)} 상가 정보 · 누르면 지도에 표시"
@@ -1069,6 +1072,7 @@ object Sheets {
                 } else {
                     val nw = ar.stores.filter { it.id in ar.newIds && ok(it) }.map { it to near(it) }.filter { it.second <= R }.sortedBy { it.second }
                     val gn = ar.gone.filter(ok).map { it to near(it) }.filter { it.second <= R }.sortedBy { it.second }
+                    now = nw.map { it.first } + gn.map { it.first }
                     box.add(a.text("✨ 새로 생긴 가게 ${nw.size}", 15f, C.TEXT, 800))
                     if (nw.isEmpty()) box.add(a.text("없어요", 13f, C.TEXT3))
                     nw.take(40).forEach { (st, d) -> box.add(row(st, d, a.chip("NEW", C.GREEN_BG, C.GREEN_TEXT))) }
@@ -1099,6 +1103,7 @@ object Sheets {
             paintCats(); fill()
         })
         s.add(android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(cats) })
+        s.add(mapAllBtn(a, s, "🏪") { now.map { Triple("${StoreData.emoji(it.kind)} ${it.name}", it.lat, it.lon) } })
         s.add(box)
         s.add(info)
         paintCats()
@@ -1132,6 +1137,14 @@ object Sheets {
             setOnClickListener { s.dismiss(); onClick() }
         }
 
+    /** 지금 목록(고른 조건 그대로)을 지도에 한꺼번에 표시하는 버튼 */
+    private fun mapAllBtn(a: MainActivity, s: Sheet, title: String, items: () -> List<Triple<String, Double, Double>>) =
+        a.btn("🗺 지금 목록 지도에서 보기", C.BLUE, Color.WHITE) {
+            val it = items().take(80)
+            if (it.isEmpty()) { a.toast("지도에 보여 줄 곳이 없어요"); return@btn }
+            s.dismiss(); a.showPlaces(title, it)
+        }
+
     private fun chipRow(a: MainActivity, opts: List<String>, sel: () -> Int, onPick: (Int) -> Unit): LinearLayout {
         val row = a.hbox(6)
         fun paint() {
@@ -1154,12 +1167,14 @@ object Sheets {
         val (clat, clon) = nearCenter(a)
         var f = 0
         var list: List<PlaceData.Park> = emptyList()
+        var now: List<PlaceData.Park> = emptyList()
         val box = a.vbox(8)
         val info = a.text("주차장 정보 받는 중…", 13f, C.TEXT3)
         fun fill() {
             box.removeAllViews()
             val shown = list.filter { when (f) { 1 -> it.fee == "무료"; 2 -> it.se == "공영"; 3 -> it.hours == "24시간"; else -> true } }
                 .map { it to Geo.dist(clat, clon, it.lat, it.lon) }.sortedBy { it.second }
+            now = shown.map { it.first }
             if (shown.isEmpty()) box.add(a.text("1km 안에 조건에 맞는 주차장이 없어요.", 14f, C.TEXT2))
             for ((p, d) in shown.take(80)) {
                 val sub = listOf(p.se, p.type, if (p.spaces > 0) "${p.spaces}면" else "", p.hours).filter { it.isNotBlank() }.joinToString(" · ")
@@ -1172,6 +1187,7 @@ object Sheets {
             info.text = "가까운 순 · 1km 안 · 누르면 지도에 표시\n실시간 빈자리는 전국 데이터가 없어서 안 나와요"
         }
         s.add(chipRow(a, listOf("전체", "무료만", "공영만", "24시간"), { f }) { f = it; fill() })
+        s.add(mapAllBtn(a, s, "🅿️") { now.map { Triple("🅿️ ${it.name}", it.lat, it.lon) } })
         s.add(box); s.add(info)
         s.show()
         a.lifecycleScope.launch {
@@ -1187,12 +1203,14 @@ object Sheets {
         var f = 0
         var list: List<PlaceData.Station> = emptyList()
         var live: Map<String, PlaceData.Live> = emptyMap()
+        var now: List<PlaceData.Station> = emptyList()
         val box = a.vbox(8)
         val info = a.text("충전소 정보 받는 중…", 13f, C.TEXT3)
         fun fill() {
             box.removeAllViews()
             val shown = list.filter { when (f) { 1 -> it.fast > 0; 2 -> (live[it.id]?.free ?: 0) > 0; else -> true } }
                 .map { it to Geo.dist(clat, clon, it.lat, it.lon) }.sortedBy { it.second }
+            now = shown.map { it.first }
             if (shown.isEmpty()) box.add(a.text(if (f == 2) "지금 빈 충전기가 있는 곳이 없어요 (가까운 10곳 기준)." else "1km 안에 충전소가 없어요.", 14f, C.TEXT2))
             for ((st, d) in shown.take(80)) {
                 val sub = listOf(if (st.fast > 0) "급속 ${st.fast}" else "", if (st.slow > 0) "완속 ${st.slow}" else "", st.useTime)
@@ -1209,6 +1227,7 @@ object Sheets {
             info.text = "가까운 순 · 1km 안 · 가까운 10곳은 지금 빈 충전기 수 표시\n누르면 지도에 표시"
         }
         s.add(chipRow(a, listOf("전체", "급속만", "지금 빈 곳"), { f }) { f = it; fill() })
+        s.add(mapAllBtn(a, s, "⚡") { now.map { Triple("⚡ ${it.name}", it.lat, it.lon) } })
         s.add(box); s.add(info)
         s.show()
         a.lifecycleScope.launch {
