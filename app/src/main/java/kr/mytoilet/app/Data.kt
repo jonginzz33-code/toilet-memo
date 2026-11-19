@@ -170,15 +170,9 @@ class Prefs(ctx: Context) {
         get() = p.getLong("noticeSeen", 0L)
         set(v) = p.edit().putLong("noticeSeen", v).apply()
     // 첫 화면 왼쪽 퀵바 (설정에서 켜고 끔, 처음엔 모두 켜짐)
-    var qDongne: Boolean
-        get() = p.getBoolean("qDongne", true)
-        set(v) = p.edit().putBoolean("qDongne", v).apply()
-    var qPark: Boolean
-        get() = p.getBoolean("qPark", true)
-        set(v) = p.edit().putBoolean("qPark", v).apply()
-    var qEv: Boolean
-        get() = p.getBoolean("qEv", true)
-        set(v) = p.edit().putBoolean("qEv", v).apply()
+    var quick: List<String>
+        get() = p.getString("quick", "dongne,park,ev,pharm")!!.split(',').filter { it.isNotBlank() }
+        set(v) = p.edit().putString("quick", v.joinToString(",")).apply()
     var adminView: Boolean
         get() = p.getBoolean("adminView", true)
         set(v) = p.edit().putBoolean("adminView", v).apply()

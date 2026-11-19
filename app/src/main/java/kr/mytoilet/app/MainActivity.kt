@@ -623,9 +623,11 @@ class MainActivity : AppCompatActivity() {
                 setPadding(dp(7), dp(1), dp(7), dp(1))
             }, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(3); bottomMargin = dp(7) })
         }
-        if (prefs.qDongne) add("🏪", "우리 동네") { Sheets.dongne(this) }
-        if (prefs.qPark) add("🅿️", "주차장") { Sheets.parking(this) }
-        if (prefs.qEv) add("⚡", "충전소") { Sheets.chargers(this) }
+        for (k in prefs.quick) {
+            val (emoji, label) = Sheets.QUICK.firstOrNull { it.first == k }?.let { it.second to it.third } ?: continue
+            add(emoji, label) { Sheets.openQuick(this, k) }
+        }
+        add("⚙", "편집") { Sheets.quickSettings(this) }
     }
 
     /** 목록에서 고른 조건 그대로 여러 곳을 한꺼번에 지도에 표시하고, 모두 보이게 화면 맞춤 */

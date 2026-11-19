@@ -1127,13 +1127,61 @@ object Sheets {
     fun storePin(a: MainActivity, st: StoreData.Store) =
         MainActivity.Pin(StoreData.emoji(st.kind), st.name, st.sub, st.lat, st.lon) { storeDetail(a, st) }
 
+    /** 왼쪽 퀵바에 고를 수 있는 것: (키, 아이콘, 이름). 가게 종류 키는 StoreData.KINDS 와 같음 */
+    val QUICK = listOf(
+        Triple("dongne", "🏪", "우리 동네"), Triple("park", "🅿️", "주차장"), Triple("ev", "⚡", "충전소"), Triple("pharm", "💊", "약국"),
+        Triple("conv", "🏪", "편의점"), Triple("cafe", "☕", "카페"), Triple("food", "🍚", "음식점"), Triple("bakery", "🥐", "빵집"),
+        Triple("glasses", "👓", "안경점"), Triple("flower", "💐", "꽃집"))
+    private const val QUICK_MAX = 6
+
+    fun openQuick(a: MainActivity, k: String) = when (k) {
+        "dongne" -> dongne(a)
+        "park" -> parking(a)
+        "ev" -> chargers(a)
+        else -> dongne(a, k)
+    }
+
+    /** 왼쪽 퀵바 설정: 필요한 것만 켜기 (켠 순서대로 위에서부터, 최대 6개) */
+    fun quickSettings(a: MainActivity) {
+        val s = Sheet(a, "⚙ 왼쪽 퀵바 설정", half = true)
+        s.add(a.text("필요한 것만 켜 주세요 · 최대 ${QUICK_MAX}개 · 켠 순서대로 위에서부터", 12f, C.TEXT2))
+        val box = a.vbox(6)
+        fun paint() {
+            box.removeAllViews()
+            val on = a.prefs.quick
+            for ((k, emoji, label) in QUICK) {
+                val idx = on.indexOf(k)
+                val row = a.hbox(10).apply {
+                    background = a.round(0xFFFFFFFF.toInt(), 14f)
+                    setPadding(a.dp(14), a.dp(12), a.dp(14), a.dp(12))
+                    add(a.text("$emoji $label" + if (k == "dongne") " (전체)" else "", 15f, C.TEXT, 700), 1f)
+                    add(a.chip(if (idx >= 0) "켜짐 · ${idx + 1}번째" else "꺼짐", if (idx >= 0) C.BLUE else C.GRAY_BG, if (idx >= 0) Color.WHITE else C.TEXT2)
+                        .apply { setPadding(a.dp(12), a.dp(6), a.dp(12), a.dp(6)) })
+                    setOnClickListener {
+                        val cur = a.prefs.quick
+                        when {
+                            k in cur -> a.prefs.quick = cur - k
+                            cur.size >= QUICK_MAX -> { a.toast("최대 ${QUICK_MAX}개까지예요. 하나를 먼저 꺼 주세요"); return@setOnClickListener }
+                            else -> a.prefs.quick = cur + k
+                        }
+                        a.refreshLeftBar(); paint()
+                    }
+                }
+                box.add(row)
+            }
+        }
+        paint()
+        s.add(box)
+        s.show()
+    }
+
     /** 우리 동네: 근처 가게 찾기 / 동네 소식(새로 생긴·목록에서 빠진 가게). 내 위치(없으면 지도 가운데) 1km 안 */
-    fun dongne(a: MainActivity) {
+    fun dongne(a: MainActivity, startKind: String = "cafe") {
         val s = Sheet(a, "🏪 우리 동네", half = true)
         val (clat, clon) = nearCenter(a)
         val R = 1000.0
         var tab = 0
-        var kind = "cafe"
+        var kind = startKind
         var limit = PAGE
         var more = false
         var area: StoreData.Area? = null
@@ -1369,10 +1417,7 @@ object Sheets {
             a.prefs.showPublic = it
             a.onCameraEnd()
         })
-        s.add(a.text("첫 화면 왼쪽 퀵바", 12f, C.TEXT2, 600))
-        s.add(a.toggleRow("🏪 우리 동네", a.prefs.qDongne) { a.prefs.qDongne = it; a.refreshLeftBar() })
-        s.add(a.toggleRow("🅿️ 주차장", a.prefs.qPark) { a.prefs.qPark = it; a.refreshLeftBar() })
-        s.add(a.toggleRow("⚡ 충전소", a.prefs.qEv) { a.prefs.qEv = it; a.refreshLeftBar() })
+        s.add(a.btn("⚙ 왼쪽 퀵바 설정") { s.dismiss(); quickSettings(a) })
         s.add(a.text("내 위치 캐릭터", 12f, C.TEXT2, 600))
         s.add(a.segmented(listOf("동글이", "휴지 친구", "물방울이"), a.prefs.character) {
             a.prefs.character = it
