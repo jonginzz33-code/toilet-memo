@@ -216,11 +216,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private lateinit var hint: TextView
-    private lateinit var clearPlacesBtn: TextView
+    private lateinit var placeCard: LinearLayout
     private val placeLabels = ArrayList<Label>()
-    private val placeTargets = HashMap<String, () -> Unit>()   // 장소 이름표 id → 누르면 열 상세 창
-    /** 지도에 띄울 장소 하나: 이름표 글자, 자리, 누르면 열 상세 창 */
-    data class Pin(val label: String, val lat: Double, val lon: Double, val open: () -> Unit)
+    private var placePins: List<Pin> = emptyList()
+    private var placeColor = 0
+    private var placeTitle = ""
+    private var placeReopen: (() -> Unit)? = null
+    private var placeSel = -1
+    private var bubbleLabel: Label? = null
+    /** 지도에 띄울 장소 하나: 이름, 한 줄 정보, 자리, 오른쪽 작은 표시(빈 곳 3 등), 누르면 열 상세 창 */
+    data class Pin(val emoji: String, val name: String, val sub: String, val lat: Double, val lon: Double, val badge: String = "", val open: () -> Unit)
     private lateinit var followBtn: ImageView
     private lateinit var loading: LinearProgressIndicator
     private lateinit var rightCol: LinearLayout
@@ -473,14 +478,14 @@ class MainActivity : AppCompatActivity() {
         }
         bottom.addView(urgentBtn, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.START })
         bottom.addView(hint, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
-        // 목록에서 '지도에서 보기'로 띄운 장소들 지우기
-        clearPlacesBtn = text("", 13f, Color.WHITE, 700, Gravity.CENTER).apply {
-            background = round(C.TEXT, 14f)
-            setPadding(dp(14), dp(7), dp(14), dp(7))
+        // 목록에서 '지도에서 보기'로 띄운 장소: 아래 카드 (몇 곳 · 목록 · 지우기 / 고른 곳 정보·길찾기)
+        placeCard = vbox(8).apply {
+            background = round(Color.WHITE, 18f)
+            elevation = dpf(6f)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
             visibility = View.GONE
-            setOnClickListener { clearPlaces() }
         }
-        bottom.addView(clearPlacesBtn, 1, LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        bottom.addView(placeCard, 1, LinearLayout.LayoutParams(-1, -2))
         placeBar = hbox(8).apply { visibility = View.GONE }
         placeBar.add(btn("🔍 검색", C.GLASS) { searchPlace() }, 1f)
         placeBar.add(btn("취소", C.GLASS) { exitPlacing() }, 1f)
@@ -599,7 +604,7 @@ class MainActivity : AppCompatActivity() {
 
 
     /** 우리 동네에서 고른 가게를 지도에 표시하고 그리로 이동 (따라가기는 끔) */
-    fun showStore(st: StoreData.Store) = showPlaces("🏪", listOf(Sheets.storePin(this, st)))
+    fun showStore(st: StoreData.Store) = showPlaces("🏪 가게", listOf(Sheets.storePin(this, st)))
 
     /** 가게·주차장·충전소를 지도에 이름표로 표시하고 그리로 이동 (따라가기는 끔) */
     /** 왼쪽 퀵바 다시 그리기 (설정에서 켜고 끌 때) */
@@ -624,32 +629,82 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** 목록에서 고른 조건 그대로 여러 곳을 한꺼번에 지도에 표시하고, 모두 보이게 화면 맞춤 */
-    fun showPlaces(title: String, items: List<Pin>) {
+    /** 목록에서 고른 조건 그대로 여러 곳을 번호 동그라미로 지도에 표시 (이름은 누를 때만). 모두 보이게 화면 맞춤 */
+    fun showPlaces(title: String, items: List<Pin>, reopen: (() -> Unit)? = null) {
         val m = map ?: return
         val layer = m.labelManager?.layer ?: return
         clearPlaces()
-        items.forEachIndexed { i, p ->
-            val (bmp, ay) = Icons.storePin(this, p.label)
-            val id = "pl_$i"
-            layer.addLabel(LabelOptions.from(id, LatLng.from(p.lat, p.lon)).setClickable(true)
-                .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(900L))?.let { placeLabels.add(it); placeTargets[id] = p.open }
-        }
         if (items.isEmpty()) return
+        placePins = items; placeTitle = title; placeReopen = reopen
+        placeColor = when (items[0].emoji) { "⚡" -> 0xFFF5A623.toInt(); "🅿️" -> C.BLUE; "💊" -> C.GREEN; else -> 0xFF8B5A2B.toInt() }
+        items.forEachIndexed { i, p ->
+            layer.addLabel(LabelOptions.from("pl_$i", LatLng.from(p.lat, p.lon)).setClickable(true)
+                .setStyles(LabelStyles.from(LabelStyle.from(Icons.numPin(this, i + 1, placeColor, false)).setAnchorPoint(0.5f, 0.5f))).setRank(900L + items.size - i))
+                ?.let { placeLabels.add(it) }
+        }
         if (following) setFollow(false)
         lastProgMove = System.currentTimeMillis()
         val pts = items.map { LatLng.from(it.lat, it.lon) } + listOfNotNull(myLat?.let { la -> myLon?.let { LatLng.from(la, it) } })
-        if (pts.size == 1) move(items[0].lat, items[0].lon, 17)
+        if (items.size == 1) move(items[0].lat, items[0].lon, 17)
         else try { m.moveCamera(CameraUpdateFactory.fitMapPoints(pts.toTypedArray(), dp(70))) } catch (_: Exception) {}
-        clearPlacesBtn.text = "$title ${items.size}곳 표시 중 · ✕ 지우기"
-        clearPlacesBtn.visibility = View.VISIBLE
+        if (items.size == 1) selectPlace(0) else paintPlaceCard()
+    }
+
+    /** 번호 하나 고르기: 크게 + 이름 말풍선 + 아래 카드에 정보·길찾기 */
+    private fun selectPlace(i: Int) {
+        val layer = map?.labelManager?.layer ?: return
+        val p = placePins.getOrNull(i) ?: return
+        placeLabels.getOrNull(placeSel)?.changeStyles(LabelStyles.from(LabelStyle.from(Icons.numPin(this, placeSel + 1, placeColor, false)).setAnchorPoint(0.5f, 0.5f)))
+        placeSel = i
+        placeLabels.getOrNull(i)?.changeStyles(LabelStyles.from(LabelStyle.from(Icons.numPin(this, i + 1, C.RED, true)).setAnchorPoint(0.5f, 0.5f)))
+        bubbleLabel?.let { try { layer.remove(it) } catch (_: Exception) {} }
+        // 말풍선 꼬리 끝이 큰 동그라미 위에 오게: 그림 아래쪽에 동그라미 반지름만큼 빈칸이 있는 셈으로 아래 기준
+        val bmp = Icons.nameBubble(this, "${p.emoji} ${p.name}", p.sub)
+        val ay = 1f + (22 * resources.displayMetrics.density) / bmp.height
+        bubbleLabel = layer.addLabel(LabelOptions.from("pl_bubble", LatLng.from(p.lat, p.lon))
+            .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(2000L))
+        paintPlaceCard()
+    }
+
+    private fun paintPlaceCard() {
+        placeCard.removeAllViews()
+        val p = placePins.getOrNull(placeSel)
+        if (p == null) {
+            val row = hbox(8)
+            row.add(text("$placeTitle ${placePins.size}곳", 15f, C.TEXT, 800), 1f)
+            placeReopen?.let { re -> row.add(chip("☰ 목록", C.BLUE_BG, C.BLUE_TEXT).apply { setPadding(dp(10), dp(6), dp(10), dp(6)); setOnClickListener { re() } }) }
+            row.add(chip("✕ 지우기", C.TEXT, Color.WHITE).apply { setPadding(dp(10), dp(6), dp(10), dp(6)); setOnClickListener { clearPlaces() } })
+            placeCard.add(row)
+            placeCard.add(text("번호는 가까운 순 · 동그라미를 누르면 이름이 보여요", 12f, C.TEXT3))
+        } else {
+            val (clat, clon) = (myLat ?: center().first) to (myLon ?: center().second)
+            val row = hbox(10)
+            row.add(text(p.emoji, 22f, C.TEXT))
+            val tx = vbox(2)
+            tx.add(text("${placeSel + 1}. ${p.name}", 15f, C.TEXT, 800))
+            tx.add(text(listOf(p.sub, Geo.fmt(Geo.dist(clat, clon, p.lat, p.lon))).filter { it.isNotBlank() }.joinToString(" · "), 12f, C.TEXT2))
+            row.add(tx, 1f)
+            if (p.badge.isNotBlank()) row.add(chip(p.badge, C.GREEN_BG, C.GREEN_TEXT))
+            row.add(text("✕", 18f, C.TEXT2).apply { setPadding(dp(6), 0, 0, 0); setOnClickListener { clearPlaces() } })
+            placeCard.add(row)
+            val btns = hbox(6)
+            btns.add(btn("🚶 걸어서", C.BLUE, Color.WHITE) { val q = p; clearPlaces(); showRoute(q.lat, q.lon, q.name) }, 1f)
+            btns.add(btn("🚗 차로", C.CAR, Color.WHITE) { val q = p; clearPlaces(); showRoute(q.lat, q.lon, q.name, car = true) }, 1f)
+            btns.add(btn("자세히") { p.open() }, 1f)
+            placeCard.add(btns)
+            if (placePins.size > 1) placeCard.add(text("다른 번호를 누르면 그 곳으로 바뀌어요", 11f, C.TEXT3))
+        }
+        placeCard.visibility = View.VISIBLE
     }
 
     fun clearPlaces() {
         val layer = map?.labelManager?.layer
         placeLabels.forEach { try { layer?.remove(it) } catch (_: Exception) {} }
         placeLabels.clear()
-        placeTargets.clear()
-        if (::clearPlacesBtn.isInitialized) clearPlacesBtn.visibility = View.GONE
+        bubbleLabel?.let { try { layer?.remove(it) } catch (_: Exception) {} }
+        bubbleLabel = null
+        placePins = emptyList(); placeSel = -1; placeReopen = null
+        if (::placeCard.isInitialized) placeCard.visibility = View.GONE
     }
 
     private fun move(lat: Double, lon: Double, zoom: Int? = null) {
@@ -823,7 +878,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun onLabelClick(label: Label) {
         if (placing) return
-        placeTargets[label.labelId]?.let { it(); return }
+        if (label.labelId.startsWith("pl_")) { label.labelId.removePrefix("pl_").toIntOrNull()?.let { selectPlace(it) }; return }
         when (val t = labelTargets[label.labelId]) {
             is Cluster -> {
                 val z = (map?.cameraPosition?.zoomLevel ?: 13) + 2

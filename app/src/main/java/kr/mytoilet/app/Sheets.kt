@@ -1069,11 +1069,11 @@ object Sheets {
     }
 
     /** 지금 목록에 보이는 곳들을 지도에 표시하는 버튼 */
-    private fun mapAllBtn(a: MainActivity, s: Sheet, title: String, pins: () -> List<MainActivity.Pin>) =
+    private fun mapAllBtn(a: MainActivity, s: Sheet, title: String, reopen: () -> Unit, pins: () -> List<MainActivity.Pin>) =
         a.btn("🗺 지금 목록 지도에서 보기", C.BLUE, Color.WHITE) {
             val p = pins()
             if (p.isEmpty()) { a.toast("지도에 보여 줄 곳이 없어요"); return@btn }
-            s.dismiss(); a.showPlaces(title, p)
+            s.dismiss(); a.showPlaces(title, p, reopen)
         }
 
     /** 장소 상세 창 공통: 정보 줄 + 걸어서·차로 길찾기 */
@@ -1122,10 +1122,10 @@ object Sheets {
     }
 
     fun pharmPin(a: MainActivity, p: PlaceData.Pharm) =
-        MainActivity.Pin("💊 ${p.name}", p.lat, p.lon) { pharmDetail(a, p) }
+        MainActivity.Pin("💊", p.name, p.status().second, p.lat, p.lon) { pharmDetail(a, p) }
 
     fun storePin(a: MainActivity, st: StoreData.Store) =
-        MainActivity.Pin("${StoreData.emoji(st.kind)} ${st.name}", st.lat, st.lon) { storeDetail(a, st) }
+        MainActivity.Pin(StoreData.emoji(st.kind), st.name, st.sub, st.lat, st.lon) { storeDetail(a, st) }
 
     /** 우리 동네: 근처 가게 찾기 / 동네 소식(새로 생긴·목록에서 빠진 가게). 내 위치(없으면 지도 가운데) 1km 안 */
     fun dongne(a: MainActivity) {
@@ -1169,7 +1169,7 @@ object Sheets {
             for ((p, d, st) in page) {
                 box.add(placeRow(a, s, "💊", p.name, p.addr.substringAfter(' ').substringAfter(' '), Geo.fmt(d),
                     a.chip(st.second, if (st.first) C.GREEN_BG else C.GRAY_BG, if (st.first) C.GREEN_TEXT else C.TEXT2)) {
-                    a.showPlaces("💊", listOf(pharmPin(a, p)))
+                    a.showPlaces("💊 약국", listOf(pharmPin(a, p)))
                 })
             }
             info.text = "가까운 순 · 1km 안 ${list.size}곳 중 ${page.size}곳" + (if (more) " · 내리면 10곳 더" else "") + "\n영업시간: 국립중앙의료원 (공휴일은 다를 수 있어요)"
@@ -1227,7 +1227,7 @@ object Sheets {
             limit = PAGE; paintCats(); fill()
         })
         s.add(android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(cats) })
-        s.add(mapAllBtn(a, s, "🏪") { now.map { storePin(a, it) } + pharmNow.map { pharmPin(a, it) } })
+        s.add(mapAllBtn(a, s, "🏪 가게", { dongne(a) }) { now.map { storePin(a, it) } + pharmNow.map { pharmPin(a, it) } })
         s.add(box)
         s.add(info)
         s.onScrollEnd = { if (more) { limit += PAGE; fill() } }
@@ -1251,7 +1251,7 @@ object Sheets {
         var now: List<PlaceData.Park> = emptyList()
         val box = a.vbox(8)
         val info = a.text("주차장 정보 받는 중…", 13f, C.TEXT3)
-        fun pin(p: PlaceData.Park) = MainActivity.Pin("🅿️ ${p.name}", p.lat, p.lon) { parkDetail(a, p) }
+        fun pin(p: PlaceData.Park) = MainActivity.Pin("🅿️", p.name, listOf(p.fee, if (p.spaces > 0) "${p.spaces}면" else "").filter { it.isNotBlank() }.joinToString(" · "), p.lat, p.lon) { parkDetail(a, p) }
         fun fill() {
             box.removeAllViews()
             val shown = list.filter { when (f) { 1 -> it.fee == "무료"; 2 -> it.se == "공영"; 3 -> it.hours == "24시간"; else -> true } }
@@ -1264,14 +1264,14 @@ object Sheets {
                 val fee = p.fee + if (p.day.isNotBlank()) " · 1일 ${p.day}" else ""
                 box.add(placeRow(a, s, "🅿️", p.name, sub, Geo.fmt(d),
                     a.chip(fee, if (p.fee == "무료") C.GREEN_BG else C.GRAY_BG, if (p.fee == "무료") C.GREEN_TEXT else C.TEXT2)) {
-                    a.showPlaces("🅿️", listOf(pin(p)))
+                    a.showPlaces("🅿️ 주차장", listOf(pin(p)))
                 })
             }
             info.text = "가까운 순 · 1km 안 ${shown.size}곳 중 ${page.size}곳" + (if (more) " · 내리면 10곳 더" else "") +
                 "\\n실시간 빈자리는 전국 데이터가 없어서 안 나와요"
         }
         s.add(chipRow(a, listOf("전체", "무료만", "공영만", "24시간"), { f }) { f = it; limit = PAGE; fill() })
-        s.add(mapAllBtn(a, s, "🅿️") { now.map { pin(it) } })
+        s.add(mapAllBtn(a, s, "🅿️ 주차장", { parking(a) }) { now.map { pin(it) } })
         s.add(box); s.add(info)
         s.onScrollEnd = { if (more) { limit += PAGE; fill() } }
         s.show()
@@ -1294,7 +1294,9 @@ object Sheets {
         var now: List<PlaceData.Station> = emptyList()
         val box = a.vbox(8)
         val info = a.text("충전소 정보 받는 중…", 13f, C.TEXT3)
-        fun pin(st: PlaceData.Station) = MainActivity.Pin("⚡ ${st.name}", st.lat, st.lon) { stationDetail(a, st) }
+        fun pin(st: PlaceData.Station) = MainActivity.Pin("⚡", st.name,
+            listOf(if (st.fast > 0) "급속 ${st.fast}" else "", if (st.slow > 0) "완속 ${st.slow}" else "").filter { it.isNotBlank() }.joinToString(" · "),
+            st.lat, st.lon, live[st.id]?.free?.takeIf { it > 0 }?.let { "빈 곳 $it" } ?: "") { stationDetail(a, st) }
         lateinit var fill: () -> Unit
         // 화면에 보이는 충전소 중 아직 안 물어본 곳만 지금 상태 확인 (무료 사용량 아끼기)
         fun loadLive() {
@@ -1319,14 +1321,14 @@ object Sheets {
                     l.busy > 0 -> a.chip("모두 충전 중", C.RED_BG, C.RED_TEXT)
                     else -> a.chip("상태 모름", C.GRAY_BG, C.TEXT2)
                 }
-                box.add(placeRow(a, s, "⚡", st.name, sub, Geo.fmt(d), chip) { a.showPlaces("⚡", listOf(pin(st))) })
+                box.add(placeRow(a, s, "⚡", st.name, sub, Geo.fmt(d), chip) { a.showPlaces("⚡ 충전소", listOf(pin(st))) })
             }
             info.text = "가까운 순 · 1km 안 ${shown.size}곳 중 ${page.size}곳" + (if (more) " · 내리면 10곳 더" else "") +
                 "\\n보이는 곳은 지금 빈 충전기 수도 확인해요"
             if (f != 2) loadLive()
         }
         s.add(chipRow(a, listOf("전체", "급속만", "지금 빈 곳"), { f }) { f = it; limit = PAGE; fill() })
-        s.add(mapAllBtn(a, s, "⚡") { now.map { pin(it) } })
+        s.add(mapAllBtn(a, s, "⚡ 충전소", { chargers(a) }) { now.map { pin(it) } })
         s.add(box); s.add(info)
         s.onScrollEnd = { if (more) { limit += PAGE; fill() } }
         s.show()

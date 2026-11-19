@@ -100,6 +100,40 @@ object Icons {
         return bmp
     }
 
+    /** 목록을 지도에 띄울 때: 번호 동그라미 (고르면 크고 진하게) */
+    fun numPin(ctx: Context, n: Int, color: Int, selected: Boolean): Bitmap {
+        val d = ctx.resources.displayMetrics.density
+        val r = (if (selected) 19 else 14) * d
+        val size = (r * 2 + 6 * d).toInt()
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp); val cx = size / 2f
+        c.drawCircle(cx, cx, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color; setShadowLayer(3 * d, 0f, d, 0x44000000) })
+        c.drawCircle(cx, cx, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 2.5f * d; this.color = Color.WHITE })
+        val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = (if (selected) 16 else 13) * d; typeface = Fonts.bold; textAlign = Paint.Align.CENTER; this.color = Color.WHITE }
+        val fm = tp.fontMetrics
+        c.drawText(n.toString(), cx, cx - (fm.ascent + fm.descent) / 2, tp)
+        return bmp
+    }
+
+    /** 고른 번호 위에 뜨는 이름 말풍선 (아래 꼬리 끝이 그림 맨 아래) */
+    fun nameBubble(ctx: Context, title: String, sub: String): Bitmap {
+        val d = ctx.resources.displayMetrics.density
+        val t = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 13 * d; typeface = Fonts.bold; color = 0xFF222222.toInt() }
+        val s = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 11 * d; typeface = Fonts.regular; color = 0xFF777777.toInt() }
+        val title2 = if (title.length > 16) title.take(15) + "…" else title
+        val w = max(t.measureText(title2), s.measureText(sub)) + 20 * d
+        val bh = (if (sub.isBlank()) 26 else 40) * d
+        val h = bh + 8 * d
+        val bmp = Bitmap.createBitmap(w.toInt() + 4, h.toInt(), Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp); val cx = bmp.width / 2f
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; setShadowLayer(3 * d, 0f, d, 0x33000000) }
+        c.drawRoundRect(RectF(2f, 2f, bmp.width - 2f, bh), 12 * d, 12 * d, bg)
+        c.drawPath(Path().apply { moveTo(cx - 6 * d, bh - 1); lineTo(cx + 6 * d, bh - 1); lineTo(cx, h - 1); close() }, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+        c.drawText(title2, 10 * d, 18 * d, t)
+        if (sub.isNotBlank()) c.drawText(sub, 10 * d, 33 * d, s)
+        return bmp
+    }
+
     /** 우리 동네 가게 표시: 이름 말풍선 + 아래 동그라미 점. 반환: (그림, 점 중심의 y 비율) */
     fun storePin(ctx: Context, label: String): Pair<Bitmap, Float> {
         val d = ctx.resources.displayMetrics.density
