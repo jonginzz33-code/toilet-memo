@@ -218,6 +218,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var hint: TextView
     private lateinit var clearPlacesBtn: TextView
     private val placeLabels = ArrayList<Label>()
+    private val placeTargets = HashMap<String, () -> Unit>()   // 장소 이름표 id → 누르면 열 상세 창
+    /** 지도에 띄울 장소 하나: 이름표 글자, 자리, 누르면 열 상세 창 */
+    data class Pin(val label: String, val lat: Double, val lon: Double, val open: () -> Unit)
     private lateinit var followBtn: ImageView
     private lateinit var loading: LinearProgressIndicator
     private lateinit var rightCol: LinearLayout
@@ -594,10 +597,9 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed({ onCameraEnd() }, 400)
     }
 
-    private var storeLabel: Label? = null
 
     /** 우리 동네에서 고른 가게를 지도에 표시하고 그리로 이동 (따라가기는 끔) */
-    fun showStore(st: StoreData.Store) = showPlace("${StoreData.emoji(st.kind)} ${st.name}", st.lat, st.lon)
+    fun showStore(st: StoreData.Store) = showPlaces("🏪", listOf(Sheets.storePin(this, st)))
 
     /** 가게·주차장·충전소를 지도에 이름표로 표시하고 그리로 이동 (따라가기는 끔) */
     /** 왼쪽 퀵바 다시 그리기 (설정에서 켜고 끌 때) */
@@ -622,20 +624,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** 목록에서 고른 조건 그대로 여러 곳을 한꺼번에 지도에 표시하고, 모두 보이게 화면 맞춤 */
-    fun showPlaces(title: String, items: List<Triple<String, Double, Double>>) {
+    fun showPlaces(title: String, items: List<Pin>) {
         val m = map ?: return
         val layer = m.labelManager?.layer ?: return
         clearPlaces()
-        for ((label, lat, lon) in items) {
-            val (bmp, ay) = Icons.storePin(this, label)
-            layer.addLabel(LabelOptions.from(LatLng.from(lat, lon))
-                .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(900L))?.let { placeLabels.add(it) }
+        items.forEachIndexed { i, p ->
+            val (bmp, ay) = Icons.storePin(this, p.label)
+            val id = "pl_$i"
+            layer.addLabel(LabelOptions.from(id, LatLng.from(p.lat, p.lon)).setClickable(true)
+                .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(900L))?.let { placeLabels.add(it); placeTargets[id] = p.open }
         }
         if (items.isEmpty()) return
         if (following) setFollow(false)
         lastProgMove = System.currentTimeMillis()
-        val pts = items.map { LatLng.from(it.second, it.third) } + listOfNotNull(myLat?.let { la -> myLon?.let { LatLng.from(la, it) } })
-        if (pts.size == 1) move(items[0].second, items[0].third, 17)
+        val pts = items.map { LatLng.from(it.lat, it.lon) } + listOfNotNull(myLat?.let { la -> myLon?.let { LatLng.from(la, it) } })
+        if (pts.size == 1) move(items[0].lat, items[0].lon, 17)
         else try { m.moveCamera(CameraUpdateFactory.fitMapPoints(pts.toTypedArray(), dp(70))) } catch (_: Exception) {}
         clearPlacesBtn.text = "$title ${items.size}곳 표시 중 · ✕ 지우기"
         clearPlacesBtn.visibility = View.VISIBLE
@@ -645,19 +648,8 @@ class MainActivity : AppCompatActivity() {
         val layer = map?.labelManager?.layer
         placeLabels.forEach { try { layer?.remove(it) } catch (_: Exception) {} }
         placeLabels.clear()
-        storeLabel?.let { try { layer?.remove(it) } catch (_: Exception) {} }
-        storeLabel = null
+        placeTargets.clear()
         if (::clearPlacesBtn.isInitialized) clearPlacesBtn.visibility = View.GONE
-    }
-
-    fun showPlace(label: String, lat: Double, lon: Double) {
-        val layer = map?.labelManager?.layer ?: return
-        clearPlaces()
-        val (bmp, ay) = Icons.storePin(this, label)
-        storeLabel = layer.addLabel(LabelOptions.from("store", LatLng.from(lat, lon))
-            .setStyles(LabelStyles.from(LabelStyle.from(bmp).setAnchorPoint(0.5f, ay))).setRank(900L))
-        if (following) setFollow(false)
-        move(lat, lon, 17)
     }
 
     private fun move(lat: Double, lon: Double, zoom: Int? = null) {
@@ -831,6 +823,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun onLabelClick(label: Label) {
         if (placing) return
+        placeTargets[label.labelId]?.let { it(); return }
         when (val t = labelTargets[label.labelId]) {
             is Cluster -> {
                 val z = (map?.cameraPosition?.zoomLevel ?: 13) + 2

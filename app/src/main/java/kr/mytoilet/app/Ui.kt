@@ -202,6 +202,8 @@ fun Context.segmented(options: List<String>, selected: Int, enabled: List<Boolea
 class Sheet(val activity: Activity, title: String?, half: Boolean = false) {
     val dialog = BottomSheetDialog(activity)
     val body: LinearLayout = activity.vbox(12)
+    /** half 창에서 목록 끝까지 내렸을 때 (더 불러오기용) */
+    var onScrollEnd: (() -> Unit)? = null
 
     init {
         val a = activity
@@ -233,6 +235,9 @@ class Sheet(val activity: Activity, title: String?, half: Boolean = false) {
                 addView(body, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 setPadding(0, 0, 0, a.dp(24))
                 clipToPadding = false
+                setOnScrollChangeListener(androidx.core.widget.NestedScrollView.OnScrollChangeListener { v, _, _, _, _ ->
+                    if (!v.canScrollVertically(1)) onScrollEnd?.invoke()
+                })
             }
             root.addView(inner, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             dialog.setContentView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))
