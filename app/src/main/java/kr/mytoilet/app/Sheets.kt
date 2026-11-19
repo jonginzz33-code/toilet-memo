@@ -1113,6 +1113,17 @@ object Sheets {
         }
     }
 
+    fun pharmDetail(a: MainActivity, p: PlaceData.Pharm) {
+        val (open, msg) = p.status()
+        val s = placeDetail(a, "💊 ${p.name}", listOf(p.addr, if (p.tel.isNotBlank()) "☎ ${p.tel}" else ""), p.lat, p.lon, p.name)
+        s.body.addView(a.text((if (open) "🟢 " else "⚪ ") + msg, 15f, if (open) C.GREEN_TEXT else C.TEXT2, 700), 1)
+        s.add(a.text("요일별 영업시간 (공휴일은 약국에 확인)", 12f, C.TEXT2, 600))
+        p.week().forEach { s.add(a.text(it, 13f, C.TEXT2)) }
+    }
+
+    fun pharmPin(a: MainActivity, p: PlaceData.Pharm) =
+        MainActivity.Pin("💊 ${p.name}", p.lat, p.lon) { pharmDetail(a, p) }
+
     fun storePin(a: MainActivity, st: StoreData.Store) =
         MainActivity.Pin("${StoreData.emoji(st.kind)} ${st.name}", st.lat, st.lon) { storeDetail(a, st) }
 
@@ -1127,6 +1138,9 @@ object Sheets {
         var more = false
         var area: StoreData.Area? = null
         var now: List<StoreData.Store> = emptyList()
+        var pharms: List<PlaceData.Pharm>? = null
+        var pharmNow: List<PlaceData.Pharm> = emptyList()
+        var openOnly = false
         val cats = a.hbox(6)
         val box = a.vbox(8)
         val info = a.text("가게 정보 받는 중…", 13f, C.TEXT3)
@@ -1134,10 +1148,38 @@ object Sheets {
         fun row(st: StoreData.Store, d: Double, chip: View?) = placeRow(a, s, StoreData.emoji(st.kind), st.name,
             "${st.sub} · ${st.addr.substringAfter(' ').substringAfter(' ')}", Geo.fmt(d), chip) { a.showStore(st) }
 
-        fun fill() {
+        lateinit var fill: () -> Unit
+        // 약국: 영업시간이 있는 약국 데이터로 '지금 영업 중' 표시
+        fun fillPharm() {
+            val ph = pharms ?: run {
+                info.text = "약국 정보 받는 중…"
+                a.lifecycleScope.launch { pharms = try { PlaceData.pharmsNear(clat, clon, R) } catch (_: Exception) { emptyList() }; fill() }
+                return
+            }
+            val cal = java.util.Calendar.getInstance()
+            val list = ph.map { Triple(it, Geo.dist(clat, clon, it.lat, it.lon), it.status(cal)) }
+                .filter { !openOnly || it.third.first }.sortedBy { it.second }
+            val page = list.take(limit)
+            pharmNow = page.map { it.first }; more = list.size > limit
+            box.add(a.chip(if (openOnly) "🟢 지금 문 연 곳만 ✓" else "🟢 지금 문 연 곳만", if (openOnly) C.GREEN_TEXT else C.GRAY_BG, if (openOnly) Color.WHITE else C.TEXT2).apply {
+                setPadding(a.dp(12), a.dp(6), a.dp(12), a.dp(6))
+                setOnClickListener { openOnly = !openOnly; limit = PAGE; fill() }
+            })
+            if (list.isEmpty()) box.add(a.text(if (openOnly) "1km 안에 지금 문 연 약국이 없어요." else "1km 안에 약국이 없어요.", 14f, C.TEXT2))
+            for ((p, d, st) in page) {
+                box.add(placeRow(a, s, "💊", p.name, p.addr.substringAfter(' ').substringAfter(' '), Geo.fmt(d),
+                    a.chip(st.second, if (st.first) C.GREEN_BG else C.GRAY_BG, if (st.first) C.GREEN_TEXT else C.TEXT2)) {
+                    a.showPlaces("💊", listOf(pharmPin(a, p)))
+                })
+            }
+            info.text = "가까운 순 · 1km 안 ${list.size}곳 중 ${page.size}곳" + (if (more) " · 내리면 10곳 더" else "") + "\n영업시간: 국립중앙의료원 (공휴일은 다를 수 있어요)"
+        }
+
+        fill = fill@{
             box.removeAllViews()
-            now = emptyList(); more = false
-            val ar = area ?: return
+            now = emptyList(); pharmNow = emptyList(); more = false
+            if (tab == 0 && kind == "pharm") { fillPharm(); return@fill }
+            val ar = area ?: return@fill
             val near = { st: StoreData.Store -> Geo.dist(clat, clon, st.lat, st.lon) }
             val ok = { st: StoreData.Store -> kind == "all" || st.kind == kind }
             if (tab == 0) {
@@ -1185,7 +1227,7 @@ object Sheets {
             limit = PAGE; paintCats(); fill()
         })
         s.add(android.widget.HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(cats) })
-        s.add(mapAllBtn(a, s, "🏪") { now.map { storePin(a, it) } })
+        s.add(mapAllBtn(a, s, "🏪") { now.map { storePin(a, it) } + pharmNow.map { pharmPin(a, it) } })
         s.add(box)
         s.add(info)
         s.onScrollEnd = { if (more) { limit += PAGE; fill() } }

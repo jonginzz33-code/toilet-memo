@@ -18,6 +18,48 @@ object PlaceData {
     data class Station(val id: String, val name: String, val lat: Double, val lon: Double, val addr: String,
                        val useTime: String, val busi: String, val fast: Int, val slow: Int)
 
+    /** 약국: hours 는 [월,화,수,목,금,토,일,공휴일] 각 "0900-1900" (없으면 "", 닫는 시간이 2400 넘으면 다음 날 새벽) */
+    data class Pharm(val id: String, val name: String, val lat: Double, val lon: Double, val addr: String, val tel: String, val hours: List<String>) {
+        private fun span(i: Int): Pair<Int, Int>? = hours.getOrNull(i)?.split('-')?.takeIf { it.size == 2 }?.let {
+            val s = it[0].toIntOrNull() ?: return null; val c = it[1].toIntOrNull() ?: return null
+            (s / 100 * 60 + s % 100) to (c / 100 * 60 + c % 100)
+        }
+        private fun hm(min: Int) = "%d:%02d".format((min / 60) % 24, min % 60)
+
+        /** 지금 문 열었는지와 짧은 설명. shortcut: 공휴일은 모름(요일 기준), 공휴일 달력이 생기면 hours[7] 쓰기 */
+        fun status(cal: java.util.Calendar = java.util.Calendar.getInstance()): Pair<Boolean, String> {
+            val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)          // 1=일 … 7=토
+            val today = if (dow == java.util.Calendar.SUNDAY) 6 else dow - 2   // 0=월 … 6=일
+            val now = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+            // 어제 밤에 열어 오늘 새벽까지 하는 곳
+            span((today + 6) % 7)?.let { (_, c) -> if (c > 1440 && now < c - 1440) return true to "영업 중 · ${hm(c)}까지" }
+            val (s, c) = span(today) ?: return false to "오늘 휴무"
+            return when {
+                now < s -> false to "영업 전 · ${hm(s)} 시작"
+                now < c -> true to (if (c - now <= 30) "곧 닫음 · ${hm(c)}" else "영업 중 · ${hm(c)}까지")
+                else -> false to "영업 끝 · ${hm(c)}에 닫음"
+            }
+        }
+
+        /** 상세 창용: 요일별 영업시간 */
+        fun week(): List<String> = listOf("월", "화", "수", "목", "금", "토", "일", "공휴일").mapIndexed { i, d ->
+            val sp = span(i)
+            "$d  " + if (sp == null) "휴무" else "${hm(sp.first)} ~ ${hm(sp.second)}"
+        }
+    }
+
+    private var pharms: List<Pharm>? = null
+
+    suspend fun pharmsNear(lat: Double, lon: Double, radiusM: Double): List<Pharm> = withContext(Dispatchers.IO) {
+        val all = pharms ?: (StoreData.loadFile("pharm.json.gz")?.getJSONArray("pharms")?.let { arr ->
+            List(arr.length()) { i -> arr.getJSONArray(i).let { a ->
+                val h = a.getJSONArray(6)
+                Pharm(a.getString(0), a.getString(1), a.getDouble(2), a.getDouble(3), a.optString(4), a.optString(5), List(h.length()) { h.optString(it) })
+            } }
+        } ?: emptyList()).also { if (it.isNotEmpty()) pharms = it }
+        all.filter { Geo.dist(lat, lon, it.lat, it.lon) <= radiusM }
+    }
+
     /** 지금 상태: 빈 충전기 수, 충전 중, 고장·점검 */
     data class Live(val free: Int, val busy: Int, val broken: Int)
 
