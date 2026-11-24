@@ -30,5 +30,10 @@ jobs:
           r = s.get(f"{base}/generatedApks/257")
           print("GEN", r.status_code)
           if r.ok:
-              print("GENBODY", json.dumps(r.json(), ensure_ascii=False)[:1500].replace("{", "(").replace("}", ")"))
+              did = r.json()["generatedApks"][0]["generatedSplitApks"][0]["downloadId"]
+              d = s.get(f"{base}/generatedApks/257/downloads/{did}:download", params={"alt": "media"})
+              print("DL", d.status_code, len(d.content))
+              open("base.apk", "wb").write(d.content)
           PY
+          AS=$(ls $ANDROID_HOME/build-tools/*/apksigner | tail -1)
+          $AS verify --print-certs base.apk | grep -E "SHA-1|SHA-256" | sed 's/^/CERT /'
