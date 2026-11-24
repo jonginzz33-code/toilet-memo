@@ -1,0 +1,35 @@
+name: Signing check
+
+# 임시: Firebase 등록 지문·OAuth 클라이언트, Play 앱 서명 지문 확인 (읽기만)
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          pip install -q google-auth requests
+          python3 - <<'PY'
+          import json, os, base64
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          info = json.loads(os.environ["FIREBASE_SA"])
+          s = AuthorizedSession(service_account.Credentials.from_service_account_info(info, scopes=[
+              "https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/androidpublisher"]))
+          app = "projects/my-toilet-ce481/androidApps/1:994060179309:android:22272bd7951941b8656c64"
+          r = s.get(f"https://firebase.googleapis.com/v1beta1/{app}/sha")
+          print("FIREBASE_SHA", [ (c.get("certType"), c.get("shaHash")) for c in r.json().get("certificates", [])])
+          r = s.get(f"https://firebase.googleapis.com/v1beta1/{app}/config")
+          cfg = json.loads(base64.b64decode(r.json()["configFileContents"]))
+          for c in cfg["client"]:
+              print("OAUTH", [ (o.get("client_type"), (o.get("android_info") or {}).get("certificate_hash")) for o in c.get("oauth_client", [])])
+          base = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/kr.mytoilet.app"
+          r = s.get(f"{base}/generatedApks/257")
+          print("GEN", r.status_code)
+          if r.ok:
+              for g in r.json().get("generatedApks", []):
+                  print("APP_SIGN_SHA256", g.get("certificateSha256Fingerprint"))
+          PY
