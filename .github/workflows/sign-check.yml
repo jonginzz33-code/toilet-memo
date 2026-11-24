@@ -30,6 +30,5 @@ jobs:
           r = s.get(f"{base}/generatedApks/257")
           print("GEN", r.status_code)
           if r.ok:
-              for g in r.json().get("generatedApks", []):
-                  print("APP_SIGN_SHA256", g.get("certificateSha256Fingerprint"))
+              print("GENBODY", json.dumps(r.json(), ensure_ascii=False)[:1500].replace("{", "(").replace("}", ")"))
           PY
