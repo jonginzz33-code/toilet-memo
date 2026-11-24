@@ -1,11 +1,11 @@
-name: Signing check
+name: Firebase add SHA
 
-# 임시: Firebase 등록 지문·OAuth 클라이언트, Play 앱 서명 지문 확인 (읽기만)
+# Play 앱 서명(실제 서명) SHA-1 을 Firebase 에 등록 (구글 로그인용). 여러 번 돌려도 같음
 on:
   workflow_dispatch:
 
 jobs:
-  check:
+  add:
     runs-on: ubuntu-latest
     steps:
       - env:
@@ -13,27 +13,17 @@ jobs:
         run: |
           pip install -q google-auth requests
           python3 - <<'PY'
-          import json, os, base64
+          import json, os
           from google.oauth2 import service_account
           from google.auth.transport.requests import AuthorizedSession
-          info = json.loads(os.environ["FIREBASE_SA"])
-          s = AuthorizedSession(service_account.Credentials.from_service_account_info(info, scopes=[
-              "https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/androidpublisher"]))
+          s = AuthorizedSession(service_account.Credentials.from_service_account_info(
+              json.loads(os.environ["FIREBASE_SA"]), scopes=["https://www.googleapis.com/auth/cloud-platform"]))
           app = "projects/my-toilet-ce481/androidApps/1:994060179309:android:22272bd7951941b8656c64"
-          r = s.get(f"https://firebase.googleapis.com/v1beta1/{app}/sha")
-          print("FIREBASE_SHA", [ (c.get("certType"), c.get("shaHash")) for c in r.json().get("certificates", [])])
-          r = s.get(f"https://firebase.googleapis.com/v1beta1/{app}/config")
-          cfg = json.loads(base64.b64decode(r.json()["configFileContents"]))
-          for c in cfg["client"]:
-              print("OAUTH", [ (o.get("client_type"), (o.get("android_info") or {}).get("certificate_hash")) for o in c.get("oauth_client", [])])
-          base = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/kr.mytoilet.app"
-          r = s.get(f"{base}/generatedApks/257")
-          print("GEN", r.status_code)
-          if r.ok:
-              did = r.json()["generatedApks"][0]["generatedSplitApks"][0]["downloadId"]
-              d = s.get(f"{base}/generatedApks/257/downloads/{did}:download", params={"alt": "media"})
-              print("DL", d.status_code, len(d.content))
-              open("base.apk", "wb").write(d.content)
+          have = [c.get("shaHash", "").lower() for c in s.get(f"https://firebase.googleapis.com/v1beta1/{app}/sha").json().get("certificates", [])]
+          # V3.0 서명(지금 폰들), V3.2 서명(안드로이드 17 이후)
+          for sha in ("907db719d587f0dfd9db657960c3c7e7b724c089", "3944848d8390950587be1e021392398e8129e69d"):
+              if sha in have:
+                  print("already", sha); continue
+              r = s.post(f"https://firebase.googleapis.com/v1beta1/{app}/sha", json={"shaHash": sha, "certType": "SHA_1"})
+              print("add", sha, r.status_code); r.raise_for_status()
           PY
-          AS=$(ls $ANDROID_HOME/build-tools/*/apksigner | tail -1)
-          $AS verify --print-certs base.apk | grep -E "SHA-1|SHA-256" | sed 's/^/CERT /'
