@@ -10,3 +10,7 @@
 - 빌드: main에 push하면 GitHub Actions(Build APK)가 APK를 만들어 Releases(latest)에 올린다. 앱 안 '업데이트 확인'으로 받는다.
 - 공중화장실 데이터: `.github/workflows/public-data.yml` 이 매달 행정안전부 API(`/info_v2`, 좌표 없음)를 받아 카카오 주소 검색(비밀값 KAKAO_REST_KEY)으로 좌표를 붙여 `public-data` 릴리스에 올린다.
 - **앱 이름:** "급할 때" (스토어 이름 "급할 때 – 화장실·주차장·충전소 찾기", 옛 이름 "나만의 화장실"). 패키지 이름 kr.mytoilet.app 은 그대로.
+- **서명·키 기억 (지도·로그인 안 될 때 먼저 볼 것):**
+  - 플레이스토어 앱의 실제 서명(Play 앱 서명) SHA-1 = `907d…c089`(카카오 키 해시 `kH23GdWH8N/Z22V5YMPH57ckwIk=`), 안드로이드 17+용 = `3944…e69d`(`OUSEjYOQlQWHvh4CE5I5joEp5p0=`). Play Console에 보이던 `4A:F3…`은 **업로드 키**라 앱 서명이 아님. 실제 값은 Play API generatedApks 를 받아 apksigner 로 확인함.
+  - 위 SHA-1 들은 Firebase 안드로이드 앱에 등록됨(구글 로그인).
+  - 앱이 쓰는 카카오 네이티브 키는 **`46e242…`로 시작하는 Default Native AppKey** (카카오 콘솔의 "나만의 화장실" ID 1643398 앱이 아닌 **다른 카카오 앱**). 키 해시는 이 카드에 넣어야 함.
